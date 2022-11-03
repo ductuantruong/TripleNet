@@ -98,6 +98,8 @@ class PairNet(nn.Module):
 
         self.encoder = nn.Sequential(self.res1_4, self.res5_7)
 
+        self.last_encoder_conv = nn.Conv2d(2048, 512, 1, bias=False)
+
         self.decoder = nn.Sequential(OrderedDict([
             ('decoder1', DecoderLayer(2048, 2048, 512)),
             ('decoder2', DecoderLayer(512, 2048, 512)),
@@ -116,8 +118,7 @@ class PairNet(nn.Module):
             self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes + 1), 3, padding=1))
 
         self.segmentation_head = nn.Sequential(
-            nn.ConvTranspose2d(512, 128, kernel_size=2, stride=2, bias=False),
-            nn.Conv2d(128, self.n_classes, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(512, self.n_classes, kernel_size=3, stride=1, padding=1)
         )
 
 
@@ -148,12 +149,12 @@ class PairNet(nn.Module):
 
         list_encoder_embedding = list_encoder_embedding[::-1]
 
-        list_decoder_embedding = list()
+        list_decoder_embedding = [self.last_encoder_conv(list_encoder_embedding[0])]
+
         for i, (name, m) in enumerate(self.decoder._modules.items()):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        # xs = [F.avg_pool2d(xs[0], xs[0].size()[2:])] + xs
         loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
         return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding)
 
@@ -174,13 +175,12 @@ class PairNet(nn.Module):
     def segmentation_prediction(self, xs):
         list_seg_hat = []
         for x in xs:
-            print(x.shape)
             out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
             out = self.segmentation_head(out)
             list_seg_hat.append(out)
         return list_seg_hat
 
-    def config300(self, x4=True):
+    def config300(self, x4=False):
         config = {
             'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6', 'res7'],
             'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
@@ -188,7 +188,7 @@ class PairNet(nn.Module):
             'image_size': 300,
             'grids': [75]*x4 + [38, 19, 10, 5, 3, 1],
             'sizes': [s / 300. for s in [30, 60, 111, 162, 213, 264, 315]],
-            'aspect_ratios': (1/3.,  1/2.,  1,  2,  3),
+            'aspect_ratios': (1/4., 1/3.,  1/2.,  1,  2,  3),
             'batch_size': 32,
             'init_lr': 1e-4,
             'stepvalues': (35000, 50000),    

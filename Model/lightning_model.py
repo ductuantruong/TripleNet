@@ -70,7 +70,9 @@ class LightningModel(pl.LightningModule):
 
         loc_hat, det_hat, seg_hat = self(img)
 
-        seg_loss = self.seg_criterion(seg_hat, seg_labels)
+        seg_loss = 0
+        for seg_h in seg_hat:
+            seg_loss += self.seg_criterion(seg_h, seg_labels)
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         val_loss = loc_loss + det_loss + seg_loss
 
