@@ -86,11 +86,13 @@ class SEDecoderLayer(nn.Module):
         # Post Upscale Conv for Channel 1
         self.in_channel1_conv = nn.Sequential(
             nn.Conv2d(in_channels1, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels))
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True))
         # Conv for Channel 2
         self.in_channel2_conv = nn.Sequential(
             nn.Conv2d(in_channels2, out_channels, kernel_size=3, padding=1, stride=stride, bias=False),
-            nn.BatchNorm2d(out_channels))
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True))
         # SE Module
         self.se_layer = nn.Sequential(*list(SqueezeExcitation(out_channels, out_channels // 16).children()))
         
