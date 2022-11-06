@@ -1,218 +1,275 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F 
+# https://github.com/amdegroot/ssd.pytorch/blob/master/data/voc0712.py
+# https://github.com/fmassa/vision/blob/voc_dataset/torchvision/datasets/voc.py
 
-from torchvision.models import resnet50
-from torchvision.models.resnet import Bottleneck
-from collections import OrderedDict
+import os
+import cv2
+import numpy as np 
+
+import sys
+import xml.etree.ElementTree as ET 
+
+import torch.utils.data
+from utils.transform import *
 
 
-class BottleneckBlock(nn.Module):
-    def __init__(self, inchannels):
-        super(BottleneckBlock, self).__init__()
-        self.conv1 = nn.Conv2d(inchannels, inchannels//4, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(inchannels//4)
-        self.conv2 = nn.Conv2d(inchannels//4, inchannels//4, kernel_size=3, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(inchannels//4)
-        self.conv3 = nn.Conv2d(inchannels//4, inchannels, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(inchannels)
-        self.relu = nn.ReLU(inplace=True)
-        self.shorcut = nn.Sequential(
-                nn.Conv2d(inchannels, inchannels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(inchannels))
-    
-    def forward(self, x):
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-        out = self.bn3(out)
+class VOC(object):
+    N_CLASSES = 21
+    CLASSES = (
+        'aeroplane', 'bicycle', 'bird', 'boat',
+        'bottle', 'bus', 'car', 'cat', 'chair',
+        'cow', 'diningtable', 'dog', 'horse',
+        'motorbike', 'person', 'pottedplant',
+        'sheep', 'sofa', 'train', 'tvmonitor','background'
+    )
 
-        identity = self.shorcut(x)
-        out += identity
-        out = self.relu(out)
-        return out
+    MEAN = [123.68, 116.779, 103.939]   # R,G,B
 
-class DecoderLayer(nn.Module):
-    def __init__(self, in_channels1, in_channels2, out_channels, stride=1):
-        super().__init__()
+    label_to_id = dict(map(reversed, enumerate(CLASSES))) 
+    id_to_label = dict(enumerate(CLASSES)) 
 
-        self.shortcut = nn.Sequential(
-            nn.Conv2d(in_channels1 + in_channels2, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels))
+
+
+
+class Viz(object):
+    def __init__(self):
+        voc = VOC()
+
+        classes = voc.CLASSES
+
+        self.id_to_label = voc.id_to_label
+        self.label_to_id = voc.label_to_id
+
+        colors = {}
+        for label in classes:
+            id = self.label_to_id[label]
+            color = self._to_color(id, len(classes))
+            colors[id] = color
+            colors[label] = color
+        self.colors =colors
+
+    def _to_color(self, indx, n_classes):
+        base = int(np.ceil(pow(n_classes, 1./3)))
+        base2 = base * base
+        b = 2 - indx / base2
+        r = 2 - (indx % base2) / base
+        g = 2 - (indx % base2) % base
+        #return (b * 127, r * 127, g * 127)
+        return (r * 127, g * 127, b * 127)
+
+    def draw_bbox(self, img, bboxes, labels, relative=False):
+        if len(labels) == 0:
+            return img
+        img = img.copy()
+        h, w = img.shape[:2]
+
+        if relative:
+            bboxes = bboxes * [w, h, w, h]
+
+        bboxes = bboxes.astype(np.int)
+        labels = labels.astype(np.int)
+
+        for bbox, label in zip(bboxes, labels):
+            left, top, right, bot = bbox
+            color = self.colors[label]
+            label = self.id_to_label[label]
+            cv2.rectangle(img, (left, top), (right, bot), color, 2)
+            #img[max(0,top-18):min(h+1,top+2), max(0,left-2):min(left + len(label)*7+5,w+1)] = 15
+            cv2.putText(img, label, (left+1, top-5), cv2.FONT_HERSHEY_DUPLEX, 0.4, color, 1, cv2.LINE_AA)
+
+        return img
+
+    def blend_segmentation(self, img, target):
+        mask = (target.max(axis=2) > 0)[..., np.newaxis] * 1.
+        blend = img * 0.3 +  target * 0.7
         
+        img = (1 - mask) * img + mask * blend
+        return img.astype('uint8')
+
+
+
+class ParseAnnotation(object):
+    def __init__(self, keep_difficult=True):
+        self.keep_difficult = keep_difficult
+
+        voc = VOC()
+        self.label_to_id = voc.label_to_id
+        self.classes = voc.CLASSES
+
+    def __call__(self, target):
+        tree = ET.parse(target).getroot()
+
+        bboxes = []
+        labels = []
+        for obj in tree.iter('object'):
+            difficult = int(obj.find('difficult').text) == 1
+            if not self.keep_difficult and difficult:
+                continue
+
+            label = obj.find('name').text.lower().strip()
+            if label not in self.classes:
+                continue
+            label = self.label_to_id[label]
+
+            bndbox = obj.find('bndbox')
+            bbox = [int(bndbox.find(_).text) - 1 for _ in ['xmin', 'ymin', 'xmax', 'ymax']]
+
+            bboxes.append(bbox)
+            labels.append(label)
+
+        return np.array(bboxes), np.array(labels)
+
+
+
+#class VOCDetection(object):
+class VOCDataset(torch.utils.data.Dataset):
+    def __init__(self, root, image_set, keep_difficult=False, transform=None, target_transform=None):
+        self.root = root
+        self.image_set = image_set
+        self.transform = transform
+        self.target_transform = target_transform
+
+        self._imgpath = os.path.join('%s', 'JPEGImages', '%s.jpg')
+        self._annopath = os.path.join('%s', 'Annotations', '%s.xml')
+        self._segpath = os.path.join('%s', 'SegmentationClass', '%s.png')
+
+        self.parse_annotation = ParseAnnotation(keep_difficult=keep_difficult)
+
+        self.ids = []
+        for year, split in image_set:
+            basepath = os.path.join(self.root, 'VOC' + str(year))
+            path = os.path.join(basepath, 'ImageSets', 'Main')
+            for file in os.listdir(path):
+                if not file.endswith('_' + split + '.txt'):
+                    continue
+                with open(os.path.join(path, file)) as f:
+                    for line in f:
+                        self.ids.append((basepath, line.strip()[:-3]))
+
+        self.ids = sorted(list(set(self.ids)), key=lambda _:_[0]+_[1])  # deterministic 
+
+    def __getitem__(self, index):
+        img_id = self.ids[index]
+
+        img = cv2.imread(self._imgpath % img_id)[:, :, ::-1]
+        bboxes, det_labels = self.parse_annotation(self._annopath % img_id)
         
-        self.residual_layer = nn.Sequential(
-            nn.Conv2d(in_channels1 + in_channels2, out_channels // 4, 1, bias=False),
-            nn.BatchNorm2d(out_channels // 4),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels // 4, out_channels // 4, 3, padding=1, stride=stride, bias=False),
-            nn.BatchNorm2d(out_channels // 4),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels // 4, out_channels, 1, bias=False),
-            nn.BatchNorm2d(out_channels))
 
-    def forward(self, x, encoder_x):
-        x = F.upsample(x, size=encoder_x.size()[2:], mode='bilinear')
-        x = torch.cat([x, encoder_x], dim=1)
-        shortcut = self.shortcut(x)
-        residual = self.residual_layer(x)
-        return F.relu(shortcut + residual)
-
-
-
-class PairNet(nn.Module):
-    def __init__(self, n_classes, image_size=300, x4=True):
-        super().__init__()
-        self.n_classes = n_classes
-        self.image_size = image_size
-        if image_size == 300:
-            self.config = self.config300(x4)
-        elif image_size == 512:
-            self.config = self.config512(x4)
-
-        self.skip_layers = self.config['skip_layers']
-        self.pred_layers = self.config['pred_layers']
-
-        self.Base = resnet50(pretrained=True)
-
-
-        self.resnet = resnet50(pretrained=True)
-        self.conv1 = nn.Sequential(*list(self.resnet.children())[:4])
-        self.res1_4 = nn.Sequential(OrderedDict([
-            ('res1', list(self.resnet.children())[4]),
-            ('res2', list(self.resnet.children())[5]),
-            ('res3', list(self.resnet.children())[6]),
-            ('res4', list(self.resnet.children())[7])]
-        ))
-        self.res5_7 = nn.Sequential(OrderedDict([
-            ('res5', BottleneckBlock(2048)),
-            ('res6', BottleneckBlock(2048)),
-            ('res7', BottleneckBlock(2048))])
-        )
-        # self.res5_7 = nn.Sequential(OrderedDict([
-        #     ('res5', list(self.resnet.children())[7]),
-        #     ('res6', list(self.resnet.children())[8]),
-        #     ('res7', list(self.resnet.children())[9])])
-        # )
-        self._initialize_weights(self.res5_7)
-
-        self.encoder = nn.Sequential(self.res1_4, self.res5_7)
-
-        self.last_encoder_conv = nn.Conv2d(2048, 512, 1, bias=False)
-
-        self.decoder = nn.Sequential(OrderedDict([
-            ('decoder1', DecoderLayer(2048, 2048, 512)),
-            ('decoder2', DecoderLayer(512, 2048, 512)),
-            ('decoder3', DecoderLayer(512,  2048, 512)),
-            ('decoder4', DecoderLayer(512,  1024, 512)),
-            ('decoder5', DecoderLayer(512,  512, 512))]
-        ))
-            # ('decoder_layer2', DecoderLayer(512,  512,  512)),
-            # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
-
-        n_boxes = len(self.config['aspect_ratios']) + 1
-        self.list_localized_head = nn.ModuleList([])
-        self.list_detector_head = nn.ModuleList([])
-        for i in range(len(self.config['grids'])):
-            self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
-            self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes + 1), 3, padding=1))
-
-        self.segmentation_head = nn.Sequential(
-            nn.Conv2d(512, self.n_classes, kernel_size=3, stride=1, padding=1)
-        )
-
-
-    def _initialize_weights(self, block):
-        for module in block.modules():
-            if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight)
-                if module.bias is not None:
-                    module.bias.data.zero_()
-            elif isinstance(module, nn.BatchNorm2d):
-                module.weight.data.fill_(1)
-                module.bias.data.zero_()
-    
-    def forward(self, x):
-        list_encoder_embedding = list()
+        if os.path.exists(self._segpath):
+            seg_labels = cv2.imread(self._segpath % img_id)[:,:,::-1]
+        else:
+            seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255
+        bboxes, det_labels = self.filter(img, bboxes, det_labels)
+        if self.transform is not None:
+            img, bboxes, _ = self.transform(img, bboxes, seg_labels)
         
-        x = self.conv1(x)
 
-        for layer_name, encoder_layer in self.res1_4._modules.items():
-            x = encoder_layer(x)
-            if layer_name in self.skip_layers:
-                list_encoder_embedding.append(x)
+        bboxes, det_labels = self.filter(img, bboxes, det_labels)
+        
+        if self.target_transform is not None:
+            bboxes, det_labels = self.target_transform(bboxes, det_labels)
 
-        for layer_name, encoder_layer in self.res5_7._modules.items():
-            x = encoder_layer(x)
-            if layer_name in self.skip_layers:
-                list_encoder_embedding.append(x)
+        # print(type(seg_labels))
+        if os.path.exists(self._segpath):
+            seg_labels = cv2.imread(self._segpath % img_id)
+        else:
+            seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255  
+            
+        transform = Compose(
+            [Resize(300),
+            ToTensor()])
+        seg_labels = transform(seg_labels)
+        # print(seg_labels.shape)
+        # print(seg_labels.squeeze(0).shape)
 
-        list_encoder_embedding = list_encoder_embedding[::-1]
+        return img, bboxes, det_labels, torch.as_tensor(seg_labels.squeeze(0),dtype=torch.long)#torch.as_tensor(seg_labels.squeeze(2), dtype= torch.long)
 
-        list_decoder_embedding = [self.last_encoder_conv(list_encoder_embedding[0])]
-        list_encoder_embedding = list_encoder_embedding[1:]
-        for i, (name, m) in enumerate(self.decoder._modules.items()):
-            x = m(x, list_encoder_embedding[i])
-            list_decoder_embedding.append(x)
+    def __len__(self):
+        return len(self.ids)
 
-        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
-        return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding)
+    def filter(self, img, boxes, labels):
+        shape = img.shape
+        if len(shape) == 2:
+            h, w = shape
+        else:   # !!
+            if shape[0] > shape[2]:   # HWC
+                h, w = img.shape[:2]
+            else:                     # CHW
+                h, w = img.shape[1:]
+
+        boxes_ = []
+        labels_ = []
+        for box, label in zip(boxes, labels):
+            if min(box[2] - box[0], box[3] - box[1]) <= 0:
+                continue
+            if np.max(boxes) < 1 and np.sqrt((box[2] - box[0]) * w * (box[3] - box[1]) * h) < 8:
+                continue
+            boxes_.append(box)
+            labels_.append(label)
+        return np.array(boxes_), np.array(labels_)
+        
+class VOCDetection(torch.utils.data.Dataset):
+    def __init__(self, root, image_set, keep_difficult=False, transform=None, target_transform=None):
+        self.root = root
+        self.image_set = image_set
+        self.transform = transform
+        self.target_transform = target_transform
+
+        self._imgpath = os.path.join('%s', 'JPEGImages', '%s.jpg')
+        self._annopath = os.path.join('%s', 'Annotations', '%s.xml')
+
+        self.parse_annotation = ParseAnnotation(keep_difficult=keep_difficult)
+
+        self.ids = []
+        for year, split in image_set:
+            basepath = os.path.join(self.root, 'VOC' + str(year))
+            path = os.path.join(basepath, 'ImageSets', 'Main')
+            for file in os.listdir(path):
+                if not file.endswith('_' + split + '.txt'):
+                    continue
+                with open(os.path.join(path, file)) as f:
+                    for line in f:
+                        self.ids.append((basepath, line.strip()[:-3]))
+
+        self.ids = sorted(list(set(self.ids)), key=lambda _:_[0]+_[1])  # deterministic 
+
+    def __getitem__(self, index):
+        img_id = self.ids[index]
+
+        img = cv2.imread(self._imgpath % img_id)[:, :, ::-1]
+        bboxes, labels = self.parse_annotation(self._annopath % img_id)
+
+        if self.transform is not None:
+            img, bboxes = self.transform(img, bboxes)
+
+        bboxes, labels = self.filter(img, bboxes, labels)
+        if self.target_transform is not None:
+            bboxes, labels = self.target_transform(bboxes, labels)
+        return img, bboxes, labels
 
 
-    def detection_prediction(self, xs):
-        locs = []
-        confs = []
-        for i, x in enumerate(xs):
-            loc = self.list_localized_head[i](x) # if isinstance(self.list_localized_head, nn.ModuleList) else self.Loc(x)
-            loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
-            locs.append(loc)
+    def __len__(self):
+        return len(self.ids)
 
-            conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
-            conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
-            confs.append(conf)
-        return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+    def filter(self, img, boxes, labels):
+        shape = img.shape
+        if len(shape) == 2:
+            h, w = shape
+        else:   # !!
+            if shape[0] > shape[2]:   # HWC
+                h, w = img.shape[:2]
+            else:                     # CHW
+                h, w = img.shape[1:]
 
-    def segmentation_prediction(self, xs):
-        list_seg_hat = []
-        for x in xs:
-            out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-            out = self.segmentation_head(out)
-            list_seg_hat.append(out)
-        return list_seg_hat
+        boxes_ = []
+        labels_ = []
+        for box, label in zip(boxes, labels):
+            if min(box[2] - box[0], box[3] - box[1]) <= 0:
+                continue
+            if np.max(boxes) < 1 and np.sqrt((box[2] - box[0]) * w * (box[3] - box[1]) * h) < 8:
+                #if np.max(boxes) < 1 and min((box[2] - box[0]) * w, (box[3] - box[1]) * h) < 5:
+                continue
+            boxes_.append(box)
+            labels_.append(label)
+        return np.array(boxes_), np.array(labels_)
 
-    def config300(self, x4=False):
-        config = {
-            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6','res7'],
-            'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
-            'name': 'PairNet300-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 300,
-            'grids': [75]*x4 + [38, 19, 10, 5, 3, 1],
-            'sizes': [s / 300. for s in [30, 60, 111, 162, 213, 264, 315]],
-            'aspect_ratios': (1/4., 1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 32,
-            'init_lr': 1e-4,
-            'stepvalues': (35000, 50000),    
-            'max_iter': 65000
-        }
-        return config
 
-    def config512(self, x4=False):
-        config = {
-            'skip_layers': ['layer1', 'layer2', 'layer3', 'layer4', 'layer5', 'layer6', 'layer7', 'layer8'],
-            'pred_layers': ['rev_layer7', 'rev_layer6', 'rev_layer5', 'rev_layer4', 'rev_layer3', 'rev_layer2'] + (
-                            ['rev_layer1']*x4),
-            'name': 'PairNet512-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 512,
-            'grids': [128]*x4 + [64, 32, 16, 8, 4, 2, 1],
-            'sizes': [s / 512. for s in [20.48, 61.2, 133.12, 215.04, 296.96, 378.88, 460.8, 542.72]],
-            'aspect_ratios': (1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 16,
-            'init_lr': 1e-4,
-            'stepvalues': (45000, 60000),
-            'max_iter': 75000
-        }
-        return config

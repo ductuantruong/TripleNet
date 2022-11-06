@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
-    parser.add_argument('--n_classes', type=int, default=20)
+    parser.add_argument('--n_classes', type=int, default=21)
     parser.add_argument('--model_checkpoint', type=str, default=None)
     parser.add_argument('--upstream_model', type=str, default=None)
     parser.add_argument('--x4', type=bool, default=False)

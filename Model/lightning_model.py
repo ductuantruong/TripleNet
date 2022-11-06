@@ -49,7 +49,7 @@ class LightningModel(pl.LightningModule):
           try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
           except IndexError:
-            seg_loss_temp = self.seg_criterion(seg_h,seg_labels*20/255)
+            seg_loss_temp = self.seg_criterion(seg_h,seg_labels*21/255)
           if not torch.isnan(seg_loss_temp):
             seg_loss += seg_loss_temp
         # print(seg_loss)
