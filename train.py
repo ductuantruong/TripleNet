@@ -58,7 +58,9 @@ if __name__ == "__main__":
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
     cfg = vars(cfg)
-    cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
+    # cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
+    cfg['grids'] =[19, 10, 10, 10, 10,10]
+
     print('Training Model on TIMIT Dataset\n#Cores = {}\t#GPU = {}'.format(cfg['n_workers'], cfg['gpu']))
 
     encoder = MultiBox(cfg)
@@ -132,7 +134,7 @@ if __name__ == "__main__":
         fast_dev_run=cfg['dev'], 
         gpus=cfg['gpu'], 
         max_epochs=cfg['epochs'], 
-        checkpoint_callback=True,
+        # checkpoint_callback=True,
         callbacks=[
             EarlyStopping(
                 monitor='val/loss',
@@ -144,10 +146,10 @@ if __name__ == "__main__":
             model_checkpoint_callback
         ],
         logger=logger,
-        resume_from_checkpoint=cfg['model_checkpoint'],
-        distributed_backend='ddp'
+        resume_from_checkpoint=cfg['model_checkpoint']
+        # ,distributed_backend='ddp'
         )
     
-    trainer.fit(model, train_dataloader=trainloader, val_dataloaders=valloader)
+    trainer.fit(model, train_dataloaders=trainloader, val_dataloaders=valloader)
 
     print('\n\nCompleted Training...\nTesting the model with checkpoint -', model_checkpoint_callback.best_model_path)

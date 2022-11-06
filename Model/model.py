@@ -93,7 +93,11 @@ class PairNet(nn.Module):
             ('res6', BottleneckBlock(2048)),
             ('res7', BottleneckBlock(2048))])
         )
-
+        # self.res5_7 = nn.Sequential(OrderedDict([
+        #     ('res5', list(self.resnet.children())[7]),
+        #     ('res6', list(self.resnet.children())[8]),
+        #     ('res7', list(self.resnet.children())[9])])
+        # )
         self._initialize_weights(self.res5_7)
 
         self.encoder = nn.Sequential(self.res1_4, self.res5_7)

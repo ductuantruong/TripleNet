@@ -35,7 +35,7 @@ class MultiBoxLoss(nn.Module):
         pos = label > 0
         neg = label == 0
         label = label.clamp(min=0)
-
+    
         pos_idx = pos.unsqueeze(-1).expand_as(xloc)
         loc_loss = F.smooth_l1_loss(xloc[pos_idx].view(-1, 4), loc[pos_idx].view(-1, 4), 
                                     size_average=False) 
