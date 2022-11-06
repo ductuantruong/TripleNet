@@ -105,10 +105,10 @@ class SEDecoderLayer(nn.Module):
 
         se_out = self.se_layer(x)
 
-        encoder_concat = self.in_channel2_conv(encoder_x)
-        encoder_concat = se_out * encoder_concat
+        encoder_x = self.in_channel2_conv(encoder_x)
+        encoder_x = se_out * encoder_x
         
-        x = torch.cat([x, encoder_concat], dim=1)
+        x = torch.cat([x, encoder_x], dim=1)
         shortcut = self.shortcut(x)
         residual = self.residual_layer(x)
         return F.relu(shortcut + residual)
@@ -356,7 +356,7 @@ class TripleNet(nn.Module):
 
         list_decoder_embedding = [self.last_encoder_conv(list_encoder_embedding[0])]
         list_encoder_embedding = list_encoder_embedding[1:]
-        
+
         for i, (name, m) in enumerate(self.decoder._modules.items()):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
