@@ -114,6 +114,62 @@ class SEDecoderLayer(nn.Module):
         return F.relu(shortcut + residual)
 
 
+# Inner-Connected Module for segmentation logits and detection
+class InnerConnectedModule(nn.Module):
+    def __init__(self, in_channels, n_boxes, n_classes, image_size, stride=1):
+        super().__init__()
+        
+        self.image_size = image_size
+        self.n_classes = n_classes
+        self.n_boxes = n_boxes
+
+        # Conv for seg output
+        self.seg_head = nn.Sequential(
+            nn.Conv2d(in_channels, n_classes + 1, kernel_size=3, stride=stride, padding=1)
+        )
+
+        # Conv before concat with skip connection
+        self.conv1 = nn.Sequential(
+            nn.BatchNorm2d(n_classes + 1), # Continue from seg_head
+            nn.ReLU(inplace=True),
+            nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
+            nn.BatchNorm2d(48),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(48, 128, kernel_size=3, stride=stride, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True))
+
+        # Conv after concat with skip connection
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(128+in_channels, 256, kernel_size=3, stride=stride, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True))
+
+        # Conv for loc and conf outputs
+        self.loc_head = nn.Sequential(
+            nn.Conv2d(256, n_boxes * 4, 3, padding=1))
+        self.conf_head = nn.Sequential(
+            nn.Conv2d(256, n_boxes * (n_classes + 1), 3, padding=1))
+
+
+    def forward(self, x):
+        shortcut = x
+        
+        x = self.seg_head(x)
+        seg_out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
+
+        x = self.conv1(x)
+        x = torch.cat([x, shortcut], dim=1)
+        x = self.conv2(x)
+
+        conf_out = self.conf_head(x)
+        conf_out = conf_out.permute(0, 2, 3, 1).contiguous().view(conf_out.size(0), -1, self.n_classes + 1)
+
+        loc_out = self.loc_head(x)
+        loc_out = loc_out.permute(0, 2, 3, 1).contiguous().view(loc_out.size(0), -1, 4)
+        
+        return seg_out, conf_out, loc_out
+
 class PairNet(nn.Module):
     def __init__(self, n_classes, image_size=300, x4=True):
         super().__init__()
@@ -311,20 +367,14 @@ class TripleNet(nn.Module):
             ('decoder4', SEDecoderLayer(512,  1024, 512)),
             ('decoder5', SEDecoderLayer(512,  512, 512))]
         ))
-            # ('decoder_layer2', DecoderLayer(512,  512,  512)),
-            # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
 
-        # TODO: Update the TripleNet layers
         n_boxes = len(self.config['aspect_ratios']) + 1
-        self.list_localized_head = nn.ModuleList([])
-        self.list_detector_head = nn.ModuleList([])
+        self.list_inner_conn_modules = nn.ModuleList([])
         for i in range(len(self.config['grids'])):
-            self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
-            self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes + 1), 3, padding=1))
+            self.list_inner_conn_modules.append(
+                InnerConnectedModule(512, n_boxes, self.n_classes, self.image_size))
 
-        self.segmentation_head = nn.Sequential(
-            nn.Conv2d(512, self.n_classes, kernel_size=3, stride=1, padding=1)
-        )
+        # TODO: Multi-scale fused Segmentation, Class-agnostic segmentation
 
 
     def _initialize_weights(self, block):
@@ -361,31 +411,23 @@ class TripleNet(nn.Module):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        # TODO: Update the TripleNet det/seg output
-        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
-        return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding)
-
-
-    def detection_prediction(self, xs):
+        # Inner Connected Module Output
         locs = []
         confs = []
-        for i, x in enumerate(xs):
-            loc = self.list_localized_head[i](x) # if isinstance(self.list_localized_head, nn.ModuleList) else self.Loc(x)
-            loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
-            locs.append(loc)
+        list_seg_hat_class_aware = []
+        for i, decoder_embedding in enumerate(list_decoder_embedding):
+            seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
+            locs.append(loc_out)
+            confs.append(conf_out)
+            list_seg_hat_class_aware.append(seg_out)
 
-            conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
-            conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
-            confs.append(conf)
-        return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+        loc_hat = torch.cat(locs, dim=1)
+        conf_hat = torch.cat(confs, dim=1)
 
-    def segmentation_prediction(self, xs):
-        list_seg_hat = []
-        for x in xs:
-            out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-            out = self.segmentation_head(out)
-            list_seg_hat.append(out)
-        return list_seg_hat
+        # TODO: Multi-scale fused Segmentation, Class-agnostic segmentation
+
+        return loc_hat, conf_hat, list_seg_hat_class_aware
+
 
     def config300(self, x4=False):
         config = {
