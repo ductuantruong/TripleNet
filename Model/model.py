@@ -108,8 +108,8 @@ class PairNet(nn.Module):
             ('decoder1', DecoderLayer(2048, 2048, 512)),
             ('decoder2', DecoderLayer(512, 2048, 512)),
             ('decoder3', DecoderLayer(512,  2048, 512)),
-            ('decoder4', DecoderLayer(512,  2048, 512)),
-            ('decoder5', DecoderLayer(512,  1024, 512))]
+            ('decoder4', DecoderLayer(512,  1024, 512)),
+            ('decoder5', DecoderLayer(512,  512, 512))]
         ))
             # ('decoder_layer2', DecoderLayer(512,  512,  512)),
             # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
