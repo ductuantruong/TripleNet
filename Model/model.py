@@ -143,7 +143,11 @@ class PairNet(nn.Module):
             ('res6', BottleneckBlock(2048)),
             ('res7', BottleneckBlock(2048))])
         )
-
+        # self.res5_7 = nn.Sequential(OrderedDict([
+        #     ('res5', list(self.resnet.children())[7]),
+        #     ('res6', list(self.resnet.children())[8]),
+        #     ('res7', list(self.resnet.children())[9])])
+        # )
         self._initialize_weights(self.res5_7)
 
         self.encoder = nn.Sequential(self.res1_4, self.res5_7)
@@ -154,8 +158,8 @@ class PairNet(nn.Module):
             ('decoder1', DecoderLayer(2048, 2048, 512)),
             ('decoder2', DecoderLayer(512, 2048, 512)),
             ('decoder3', DecoderLayer(512,  2048, 512)),
-            ('decoder4', DecoderLayer(512,  2048, 512)),
-            ('decoder5', DecoderLayer(512,  1024, 512))]
+            ('decoder4', DecoderLayer(512,  1024, 512)),
+            ('decoder5', DecoderLayer(512,  512, 512))]
         ))
             # ('decoder_layer2', DecoderLayer(512,  512,  512)),
             # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
@@ -200,7 +204,7 @@ class PairNet(nn.Module):
         list_encoder_embedding = list_encoder_embedding[::-1]
 
         list_decoder_embedding = [self.last_encoder_conv(list_encoder_embedding[0])]
-
+        list_encoder_embedding = list_encoder_embedding[1:]
         for i, (name, m) in enumerate(self.decoder._modules.items()):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
@@ -232,7 +236,7 @@ class PairNet(nn.Module):
 
     def config300(self, x4=False):
         config = {
-            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6', 'res7'],
+            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6','res7'],
             'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
             'name': 'PairNet300-resnet50-Det' + '-s4' if x4 else '-s8',
             'image_size': 300,

@@ -15,6 +15,7 @@ class MultiBox(object):
 
         steps = None
         grids = cfg['grids']
+        # grids = cfg[]
         sizes = cfg['sizes']
         aspect_ratios = cfg['aspect_ratios']
         if isinstance(aspect_ratios[0], Number):
@@ -28,17 +29,22 @@ class MultiBox(object):
             else:
                 step_w, step_h = (steps[k], steps[k]) if isinstance(steps[k], Number) else steps[k]
 
+            temp = 0
             for u, v in itertools.product(range(h), range(w)):  # mind the order
+                temp += 1
                 cx = (v + 0.5) * step_w
                 cy = (u + 0.5) * step_h
 
                 s = np.sqrt(sizes[k] * sizes[k+1])
                 anchor_boxes.append([cx, cy, s, s])
+                
+                
 
                 s = sizes[k]
                 for ar in aspect_ratios[k]:
+                    
                     anchor_boxes.append([cx, cy, s * np.sqrt(ar), s * np.sqrt(1. / ar)])
-
+           
         self.anchor_boxes = np.array(anchor_boxes)      # x-y-w-h
         self.anchor_boxes_ = np.hstack([                # l-t-r-b, normalized
             self.anchor_boxes[:, :2] - self.anchor_boxes[:, 2:] / 2,

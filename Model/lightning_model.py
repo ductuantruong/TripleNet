@@ -36,21 +36,30 @@ class LightningModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
-        y_h = torch.stack(y_h).reshape(-1,)
-        y_a = torch.stack(y_a).reshape(-1,)
-        y_g = torch.stack(y_g).reshape(-1,)
+        # y_h = torch.stack(y_h).reshape(-1,)
+        # y_a = torch.stack(y_a).reshape(-1,)
+        # y_g = torch.stack(y_g).reshape(-1,)
         
         loc_hat, det_hat, seg_hat = self(img)
 
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        seg_loss = self.seg_criterion(seg_hat, seg_labels)
+        # seg_loss = self.seg_criterion(seg_hat, seg_labels)
+        seg_loss = 0.0
+        for seg_h in seg_hat:
+          try:
+            seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
+          except IndexError:
+            seg_loss_temp = self.seg_criterion(seg_h,seg_labels*20/255)
+          if not torch.isnan(seg_loss_temp):
+            seg_loss += seg_loss_temp
+        # print(seg_loss)
         loss = loc_loss + det_loss + seg_loss
 
         return {
                 'loss':loss, 
                 'train_loc_loss': det_loss.item(),
                 'train_det_loss': det_loss.item(),
-                'train_seg_loss': seg_loss.item(),
+                'train_seg_loss': seg_loss,
             }
     
     def training_epoch_end(self, outputs):
@@ -67,12 +76,17 @@ class LightningModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
-
+        
         loc_hat, det_hat, seg_hat = self(img)
 
         seg_loss = 0
         for seg_h in seg_hat:
+          try:
             seg_loss += self.seg_criterion(seg_h, seg_labels)
+          except IndexError:
+            seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
+        # print(loc_hat.shape)
+        # print(bboxes.shape)
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         val_loss = loc_loss + det_loss + seg_loss
 
