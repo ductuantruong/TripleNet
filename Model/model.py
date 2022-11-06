@@ -302,8 +302,8 @@ class TripleNet(nn.Module):
             ('decoder1', SEDecoderLayer(2048, 2048, 512)),
             ('decoder2', SEDecoderLayer(512, 2048, 512)),
             ('decoder3', SEDecoderLayer(512,  2048, 512)),
-            ('decoder4', SEDecoderLayer(512,  2048, 512)),
-            ('decoder5', SEDecoderLayer(512,  1024, 512))]
+            ('decoder4', SEDecoderLayer(512,  1024, 512)),
+            ('decoder5', SEDecoderLayer(512,  512, 512))]
         ))
             # ('decoder_layer2', DecoderLayer(512,  512,  512)),
             # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
@@ -348,7 +348,7 @@ class TripleNet(nn.Module):
 
         list_encoder_embedding = list_encoder_embedding[::-1]
 
-        list_decoder_embedding = [self.last_encoder_conv(list_encoder_embedding[0])]
+        list_decoder_embedding = [self.last_encoder_conv(x)]
 
         for i, (name, m) in enumerate(self.decoder._modules.items()):
             x = m(x, list_encoder_embedding[i])
@@ -382,7 +382,7 @@ class TripleNet(nn.Module):
 
     def config300(self, x4=False):
         config = {
-            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6', 'res7'],
+            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6'],
             'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
             'name': 'PairNet300-resnet50-Det' + '-s4' if x4 else '-s8',
             'image_size': 300,
