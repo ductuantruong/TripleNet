@@ -59,7 +59,7 @@ if __name__ == "__main__":
     cfg = parser.parse_args()
     cfg = vars(cfg)
     # cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
-    cfg['grids'] =[19, 10, 10, 10, 10,10]
+    cfg['grids'] =[38,19,10, 10, 10,10]
 
     print('Training Model on TIMIT Dataset\n#Cores = {}\t#GPU = {}'.format(cfg['n_workers'], cfg['gpu']))
 
