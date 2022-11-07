@@ -130,7 +130,7 @@ class InnerConnectedModule(nn.Module):
 
         # Conv before concat with skip connection
         self.conv1 = nn.Sequential(
-            nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
+            nn.Conv2d(n_classes, 48, kernel_size=3, stride=stride, padding=1),
             nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
             nn.Conv2d(48, 128, kernel_size=3, stride=stride, padding=1),
@@ -382,8 +382,10 @@ class TripleNet(nn.Module):
             nn.Conv2d(512*n_decoder_output, self.n_classes, kernel_size=3, stride=1, padding=1)
         )
 
-        
-        # TODO: Class-agnostic segmentation
+        # Class-agnostic segmentation
+        self.list_clsagnos_seg_head = nn.Sequential(
+            nn.Conv2d(512, 2, kernel_size=3, stride=1, padding=1)
+        )
 
 
     def _initialize_weights(self, block):
@@ -436,9 +438,10 @@ class TripleNet(nn.Module):
         # Multi-scale fused Segmentation
         msf_seg_hat = self.msf_seg_prediction(list_decoder_embedding)
 
-        # TODO Class-agnostic segmentation
+        # Class-agnostic segmentation
+        list_seg_hat_class_agnost = self.class_agnos_seg_prediction(list_decoder_embedding)
 
-        return loc_hat, conf_hat, list_seg_hat_class_aware, msf_seg_hat
+        return loc_hat, conf_hat, msf_seg_hat, list_seg_hat_class_aware, list_seg_hat_class_agnost
 
     # Multi-scale Fused Segmentation 
     def msf_seg_prediction(self, xs):
@@ -450,6 +453,16 @@ class TripleNet(nn.Module):
         concated_map = torch.cat(list_maps, dim=1)
         msf_seg_hat = self.msf_seg_head(concated_map)
         return msf_seg_hat
+
+    # Class-agnostic segmentation
+    def class_agnos_seg_prediction(self, xs):
+        list_seg_hat_cls_agnos = []
+        for i, x in enumerate(xs):
+            out = self.list_clsagnos_seg_head(x)
+            out = F.interpolate(out, size=self.image_size, mode='bilinear', align_corners=True)
+            list_seg_hat_cls_agnos.append(out)
+        
+        return list_seg_hat_cls_agnos
 
     def config300(self, x4=False):
         config = {
@@ -483,6 +496,7 @@ class TripleNet(nn.Module):
             'max_iter': 75000
         }
         return config
+
 
 
 
