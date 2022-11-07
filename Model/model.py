@@ -369,15 +369,21 @@ class TripleNet(nn.Module):
         ))
 
         n_boxes = len(self.config['aspect_ratios']) + 1
+        n_decoder_output = len(self.decoder._modules.items()) + 1
 
         # Inner Connected Module
         self.list_inner_conn_modules = nn.ModuleList([])
-        for i in range(len(self.config['grids'])):
+        for i in range(n_decoder_output):
             self.list_inner_conn_modules.append(
                 InnerConnectedModule(512, n_boxes, self.n_classes, self.image_size))
 
+        # Multi-scale Fused Segmentation
+        self.msf_seg_head = nn.Sequential(
+            nn.Conv2d(512*n_decoder_output, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
+        )
 
-        # TODO: Multi-scale fused Segmentation, Class-agnostic segmentation
+        
+        # TODO: Class-agnostic segmentation
 
 
     def _initialize_weights(self, block):
@@ -427,10 +433,23 @@ class TripleNet(nn.Module):
         loc_hat = torch.cat(locs, dim=1)
         conf_hat = torch.cat(confs, dim=1)
 
-        # TODO: Multi-scale fused Segmentation, Class-agnostic segmentation
+        # Multi-scale fused Segmentation
+        msf_seg_hat = self.msf_seg_prediction(list_decoder_embedding)
 
-        return loc_hat, conf_hat, list_seg_hat_class_aware
+        # TODO Class-agnostic segmentation
 
+        return loc_hat, conf_hat, list_seg_hat_class_aware, msf_seg_hat
+
+    # Multi-scale Fused Segmentation 
+    def msf_seg_prediction(self, xs):
+        list_maps = []
+        for x in xs:
+            upsampled_map = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
+            list_maps.append(upsampled_map)
+        
+        concated_map = torch.cat(list_maps, dim=1)
+        msf_seg_hat = self.msf_seg_head(concated_map)
+        return msf_seg_hat
 
     def config300(self, x4=False):
         config = {
