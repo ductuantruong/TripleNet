@@ -13,13 +13,13 @@ from utils.transform import *
 
 
 class VOC(object):
-    N_CLASSES = 20
+    N_CLASSES = 21
     CLASSES = (
         'aeroplane', 'bicycle', 'bird', 'boat',
         'bottle', 'bus', 'car', 'cat', 'chair',
         'cow', 'diningtable', 'dog', 'horse',
         'motorbike', 'person', 'pottedplant',
-        'sheep', 'sofa', 'train', 'tvmonitor'
+        'sheep', 'sofa', 'train', 'tvmonitor','background'
     )
 
     MEAN = [123.68, 116.779, 103.939]   # R,G,B
