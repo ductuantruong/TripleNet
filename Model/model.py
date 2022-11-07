@@ -130,8 +130,6 @@ class InnerConnectedModule(nn.Module):
 
         # Conv before concat with skip connection
         self.conv1 = nn.Sequential(
-            nn.BatchNorm2d(n_classes + 1), # Continue from seg_head
-            nn.ReLU(inplace=True),
             nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
             nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
@@ -360,6 +358,8 @@ class TripleNet(nn.Module):
 
         self.last_encoder_conv = nn.Conv2d(2048, 512, 1, bias=False)
 
+        # Decode layers with Squeeze-Excitation Module
+        # (Also known as attention skip-layer fusion)
         self.decoder = nn.Sequential(OrderedDict([
             ('decoder1', SEDecoderLayer(2048, 2048, 512)),
             ('decoder2', SEDecoderLayer(512, 2048, 512)),
@@ -369,10 +369,13 @@ class TripleNet(nn.Module):
         ))
 
         n_boxes = len(self.config['aspect_ratios']) + 1
+
+        # Inner Connected Module
         self.list_inner_conn_modules = nn.ModuleList([])
         for i in range(len(self.config['grids'])):
             self.list_inner_conn_modules.append(
                 InnerConnectedModule(512, n_boxes, self.n_classes, self.image_size))
+
 
         # TODO: Multi-scale fused Segmentation, Class-agnostic segmentation
 
