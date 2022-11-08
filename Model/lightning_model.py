@@ -46,13 +46,17 @@ class LightningModel(pl.LightningModule):
         # seg_loss = self.seg_criterion(seg_hat, seg_labels)
         seg_loss = 0
         for seg_h in seg_hat:
-          #try:
+            # try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
             seg_loss += seg_loss_temp
-          #except IndexError:
-          #  seg_loss_temp = self.seg_criterion(seg_h, seg_labels * 20/255)
-          #if not torch.isnan(seg_loss_temp):
-          #  seg_loss += seg_loss_temp
+            # except IndexError:
+                # print(seg_labels)
+                # print(seg_labels.shape, seg_h.shape)
+                # seg_labels = torch.as_tensor(seg_labels * 20/254, dtype=torch.long)
+                # print(seg_labels)
+                # seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
+            # if not torch.isnan(seg_loss_temp):
+                # seg_loss += seg_loss_temp
         loss = loc_loss + det_loss + seg_loss
 
         return {

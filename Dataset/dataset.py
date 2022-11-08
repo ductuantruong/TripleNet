@@ -4,6 +4,7 @@
 import os
 import cv2
 import numpy as np 
+from PIL import Image
 
 import sys
 import xml.etree.ElementTree as ET 
@@ -155,7 +156,8 @@ class VOCDataset(torch.utils.data.Dataset):
         
 
         if os.path.exists(self._segpath  % img_id):
-            seg_labels = cv2.imread(self._segpath % img_id)[:,:,::-1]
+            seg_labels = Image.open(self._segpath % img_id)
+            seg_labels = np.array(seg_labels, dtype=np.uint8)
         else:
             seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255
         bboxes, det_labels = self.filter(img, bboxes, det_labels)
@@ -166,7 +168,6 @@ class VOCDataset(torch.utils.data.Dataset):
         if self.target_transform is not None:
             bboxes, det_labels = self.target_transform(bboxes, det_labels)
 
-        # print(seg_labels.shape)
         # if os.path.exists(self._segpath  % img_id):
         #     seg_labels = cv2.imread(self._segpath % img_id)[:,:,::-1]
         # else:
@@ -179,7 +180,7 @@ class VOCDataset(torch.utils.data.Dataset):
         # print(seg_labels.shape)
         # print(seg_labels.squeeze(0).shape)
 
-        return img, bboxes, det_labels,  torch.as_tensor(seg_labels.squeeze(2),dtype=torch.long)#torch.as_tensor(seg_labels.squeeze(2), dtype= torch.long)
+        return img, bboxes, det_labels, torch.as_tensor(seg_labels.squeeze(2), dtype=torch.long)
 
     def __len__(self):
         return len(self.ids)
