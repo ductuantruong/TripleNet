@@ -8,7 +8,7 @@ from Model.model import PairNet
 
 from utils.loss import MultiBoxLoss
 
-class LightningModel(pl.LightningModule):
+class LightningModelPairNet(pl.LightningModule):
     def __init__(self, HPARAMS):
         super().__init__()
         self.save_hyperparameters()
