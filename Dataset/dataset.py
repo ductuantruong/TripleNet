@@ -154,34 +154,32 @@ class VOCDataset(torch.utils.data.Dataset):
         bboxes, det_labels = self.parse_annotation(self._annopath % img_id)
         
 
-        if os.path.exists(self._segpath):
+        if os.path.exists(self._segpath  % img_id):
             seg_labels = cv2.imread(self._segpath % img_id)[:,:,::-1]
         else:
             seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255
         bboxes, det_labels = self.filter(img, bboxes, det_labels)
         if self.transform is not None:
-            img, bboxes, _ = self.transform(img, bboxes, seg_labels)
-        
-
+            img, bboxes, seg_labels = self.transform(img, bboxes, seg_labels)
         bboxes, det_labels = self.filter(img, bboxes, det_labels)
         
         if self.target_transform is not None:
             bboxes, det_labels = self.target_transform(bboxes, det_labels)
 
-        # print(type(seg_labels))
-        if os.path.exists(self._segpath):
-            seg_labels = cv2.imread(self._segpath % img_id)
-        else:
-            seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255  
+        # print(seg_labels.shape)
+        # if os.path.exists(self._segpath  % img_id):
+        #     seg_labels = cv2.imread(self._segpath % img_id)[:,:,::-1]
+        # else:
+        #     seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255  
             
-        transform = Compose(
-            [Resize(300),
-            ToTensor()])
-        seg_labels = transform(seg_labels)
+        # transform = Compose(
+        #     [Resize(300),
+        #     ToTensor()])
+        # seg_labels = transform(seg_labels)
         # print(seg_labels.shape)
         # print(seg_labels.squeeze(0).shape)
 
-        return img, bboxes, det_labels, torch.as_tensor(seg_labels.squeeze(0),dtype=torch.long)#torch.as_tensor(seg_labels.squeeze(2), dtype= torch.long)
+        return img, bboxes, det_labels,  torch.as_tensor(seg_labels.squeeze(2),dtype=torch.long)#torch.as_tensor(seg_labels.squeeze(2), dtype= torch.long)
 
     def __len__(self):
         return len(self.ids)

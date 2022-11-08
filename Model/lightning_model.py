@@ -94,7 +94,7 @@ class LightningModel(pl.LightningModule):
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss':seg_loss.item()
+                'val_seg_loss':seg_loss
             }
 
     def validation_epoch_end(self, outputs):
