@@ -46,13 +46,20 @@ class LightningModel(pl.LightningModule):
         # seg_loss = self.seg_criterion(seg_hat, seg_labels)
         seg_loss = 0.0
         for seg_h in seg_hat:
+          print(seg_h.shape)
           try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
           except IndexError:
-            seg_loss_temp = self.seg_criterion(seg_h,seg_labels*21/255)
+            seg_loss_temp = self.seg_criterion(seg_h,torch.as_tensor(seg_labels*20/254,dtype=torch.long))
+            # pass
           if not torch.isnan(seg_loss_temp):
             seg_loss += seg_loss_temp
-        # print(seg_loss)
+        print('\n%%%%%%%%%%%%')
+        print(f"Loc_loss:{loc_loss}")
+        print(f"Det_loss:{det_loss}")
+        print(f"Seg_loss:{seg_loss}")
+        print('%%%%%%%%%%%%')
+
         loss = loc_loss + det_loss + seg_loss
 
         return {
@@ -81,10 +88,14 @@ class LightningModel(pl.LightningModule):
 
         seg_loss = 0
         for seg_h in seg_hat:
+          # print(seg_h.shape)
           try:
-            seg_loss += self.seg_criterion(seg_h, seg_labels)
+            seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
           except IndexError:
-            seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
+            seg_loss_temp = self.seg_criterion(seg_h,torch.as_tensor(seg_labels*18/255,dtype=torch.long))
+            # pass
+          if not torch.isnan(seg_loss_temp):
+            seg_loss += seg_loss_temp
         # print(loc_hat.shape)
         # print(bboxes.shape)
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
@@ -94,7 +105,7 @@ class LightningModel(pl.LightningModule):
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss':seg_loss.item()
+                'val_seg_loss':seg_loss
             }
 
     def validation_epoch_end(self, outputs):
