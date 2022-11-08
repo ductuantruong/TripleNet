@@ -44,22 +44,22 @@ class LightningModel(pl.LightningModule):
 
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         # seg_loss = self.seg_criterion(seg_hat, seg_labels)
-        seg_loss = 0.0
+        seg_loss = 0
         for seg_h in seg_hat:
-          try:
+          #try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
-          except IndexError:
-            seg_loss_temp = self.seg_criterion(seg_h, seg_labels * 21/255)
-          if not torch.isnan(seg_loss_temp):
             seg_loss += seg_loss_temp
-        # print(seg_loss)
+          #except IndexError:
+          #  seg_loss_temp = self.seg_criterion(seg_h, seg_labels * 20/255)
+          #if not torch.isnan(seg_loss_temp):
+          #  seg_loss += seg_loss_temp
         loss = loc_loss + det_loss + seg_loss
 
         return {
                 'loss':loss, 
                 'train_loc_loss': det_loss.item(),
                 'train_det_loss': det_loss.item(),
-                'train_seg_loss': seg_loss,
+                'train_seg_loss': seg_loss.item(),
             }
     
     def training_epoch_end(self, outputs):
@@ -81,10 +81,10 @@ class LightningModel(pl.LightningModule):
 
         seg_loss = 0
         for seg_h in seg_hat:
-          try:
-            seg_loss += self.seg_criterion(seg_h, seg_labels)
-          except IndexError:
-            seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
+          #try:
+          seg_loss += self.seg_criterion(seg_h, seg_labels)
+          #except IndexError:
+          #  seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
         # print(loc_hat.shape)
         # print(bboxes.shape)
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
