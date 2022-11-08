@@ -42,7 +42,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(add_help=True)
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     model_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
-        monitor='val/loss', 
+        monitor='train/loss', 
         mode='min',
         verbose=1)
 
@@ -134,10 +134,9 @@ if __name__ == "__main__":
         fast_dev_run=cfg['dev'], 
         gpus=cfg['gpu'], 
         max_epochs=cfg['epochs'], 
-        # checkpoint_callback=True,
         callbacks=[
             EarlyStopping(
-                monitor='val/loss',
+                monitor='train/loss',
                 min_delta=0.00,
                 patience=20,
                 verbose=True,
@@ -147,9 +146,10 @@ if __name__ == "__main__":
         ],
         logger=logger,
         resume_from_checkpoint=cfg['model_checkpoint'],
-        distributed_backend='ddp'
-        )
+        distributed_backend='ddp',
+        auto_lr_find=True
+    )
     
-    trainer.fit(model, train_dataloaders=trainloader, val_dataloaders=valloader)
+    trainer.fit(model, train_dataloaders=trainloader)
 
     print('\n\nCompleted Training...\nTesting the model with checkpoint -', model_checkpoint_callback.best_model_path)
