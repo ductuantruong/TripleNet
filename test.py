@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
     parser.add_argument('--run_name', type=str, default='first_try')
+    parser.add_argument('--model_checkpoint', type=str, default='checkpoints/')
 
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
@@ -67,15 +68,12 @@ if __name__ == "__main__":
     transform = Compose([
             [ColorJitter(prob=0.5)],  # or write [ColorJitter(), None]
             BoxesToCoords(),
-            ObjectRandomCrop(),
-            HorizontalFlip(),
             Resize(300),
             CoordsToBoxes(),
             [SubtractMean(mean=VOC.MEAN)],
             [RGB2BGR()],
             [ToTensor()],
-            ], RandomState(233), mode=None, fillval=VOC.MEAN)
-    target_transform = encoder.encode
+            ])
 
     ## Test Dataset
     test_set = VOCDataset(
@@ -83,7 +81,7 @@ if __name__ == "__main__":
         image_set=[('2007', 'test')],
         keep_difficult=True,
         transform=transform,
-        target_transform=target_transform
+        target_transform=None
     )
 
     ## Validation Dataloader
