@@ -3,11 +3,7 @@ from multiprocessing import Pool
 import os
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning import Trainer
-from IPython import embed
 
 import torch
 import torch.utils.data as data
@@ -15,12 +11,15 @@ import random
 from numpy.random import RandomState
 import numpy as np
 
-from Model.lightning_model import LightningModelPairNet
+from Model.lightning_model import LightningModel
 
 from Dataset.dataset import VOC, VOCDataset
 
 from utils.multibox import MultiBox
 from utils.transform import *
+from utils.metric import *
+
+from tqdm import tqdm 
 
 # SEED
 def seed_torch(seed=100):
@@ -54,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
     parser.add_argument('--run_name', type=str, default='first_try')
+    parser.add_argument('--model_checkpoint', type=str, default='checkpoints/')
 
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
@@ -68,88 +68,63 @@ if __name__ == "__main__":
     transform = Compose([
             [ColorJitter(prob=0.5)],  # or write [ColorJitter(), None]
             BoxesToCoords(),
-            ObjectRandomCrop(),
-            HorizontalFlip(),
             Resize(300),
             CoordsToBoxes(),
             [SubtractMean(mean=VOC.MEAN)],
             [RGB2BGR()],
             [ToTensor()],
-            ], RandomState(233), mode=None, fillval=VOC.MEAN)
-    target_transform = encoder.encode
+            ])
 
-
-
-    # Training, Validation and Testing Dataset
-    ## Training Dataset
-    train_set = VOCDataset(
+    ## Test Dataset
+    test_set = VOCDataset(
         root=cfg['voc_root'], 
-        image_set=[('2007', 'trainval')],
+        image_set=[('2007', 'test')],
         keep_difficult=True,
         transform=transform,
-        target_transform=target_transform
-    )
-    ## Training DataLoader
-    trainloader = data.DataLoader(
-        train_set, 
-        batch_size=cfg['batch_size'], 
-        shuffle=True, 
-        num_workers=cfg['n_workers']
-    )
-    ## Validation Dataset
-    valid_set = VOCDataset(
-        root=cfg['voc_root'], 
-        image_set=[('2007', 'trainval')],
-        keep_difficult=True,
-        transform=transform,
-        target_transform=target_transform
+        target_transform=None
     )
 
     ## Validation Dataloader
-    valloader = data.DataLoader(
-        valid_set, 
+    testloader = data.DataLoader(
+        test_set, 
         batch_size=1,
         shuffle=False, 
         num_workers=cfg['n_workers']
     )
 
-    print('Dataset Split (Train, Validation, Test)=', len(train_set), len(valid_set))
 
+    model = LightningModel.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
+    model.to('cuda')
+    model.eval()
 
-    logger = WandbLogger(
-        name=cfg['run_name'],
-        project='DL',
-        offline=True
-    )
+    gt_bboxes = []
+    gt_labels = []
+    pix_acc = []
+    m_IoU = []
+    pred_bboxes = []
+    pred_labels = []
+    pred_scores = []
 
-    model = LightningModelPairNet(cfg)
+    for batch in tqdm(testloader):
+        img, bboxes, det_labels, seg_labels = batch
 
-    model_checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints',
-        monitor='train/loss', 
-        mode='min',
-        verbose=1)
+        gt_bboxes.append(bboxes)
+        gt_labels.append(det_labels)
 
-    trainer = Trainer(
-        fast_dev_run=cfg['dev'], 
-        gpus=cfg['gpu'], 
-        max_epochs=cfg['epochs'], 
-        callbacks=[
-            EarlyStopping(
-                monitor='train/loss',
-                min_delta=0.00,
-                patience=20,
-                verbose=True,
-                mode='min'
-                ),
-            model_checkpoint_callback
-        ],
-        logger=logger,
-        resume_from_checkpoint=cfg['model_checkpoint'],
-        # distributed_backend='ddp',
-        auto_lr_find=True
-    )
-    
-    trainer.fit(model, train_dataloaders=trainloader)
+        loc_hat, det_hat, seg_hat = model(img, is_eval=True)
+        b_pix_ccc, b_IoU, _ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
+        pix_acc.append(b_pix_ccc)
+        pix_acc.append(b_IoU)
 
-    print('\n\nCompleted Training...\nTesting the model with checkpoint -', model_checkpoint_callback.best_model_path)
+        loc_hat = loc_hat.data.cpu().numpy()[0]
+        det_hat = det_hat.data.cpu().numpy()[0]
+
+        boxes, labels, scores = encoder.decode(loc_hat, det_hat, nms_thresh=0.5, conf_thresh=0.01)
+
+        pred_bboxes.append(boxes)
+        pred_labels.append(labels)
+        pred_scores.append(scores)
+
+    print(eval_voc_detection(pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, iou_thresh=0.5, use_07_metric=True))
+
+        

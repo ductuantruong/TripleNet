@@ -240,7 +240,7 @@ class PairNet(nn.Module):
                 module.weight.data.fill_(1)
                 module.bias.data.zero_()
     
-    def forward(self, x):
+    def forward(self, x, is_eval=False):
         list_encoder_embedding = list()
         
         x = self.conv1(x)
@@ -263,30 +263,45 @@ class PairNet(nn.Module):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
-        return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding)
+        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding, is_eval) 
+        return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding, is_eval)
 
 
-    def detection_prediction(self, xs):
+    def detection_prediction(self, xs, is_eval):
         locs = []
         confs = []
-        for i, x in enumerate(xs):
-            loc = self.list_localized_head[i](x) # if isinstance(self.list_localized_head, nn.ModuleList) else self.Loc(x)
+        if is_eval:
+            x = xs[-1]
+            loc = self.list_localized_head[-1](x)
             loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
-            locs.append(loc)
 
-            conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
+            conf = self.list_detector_head[-1](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
             conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
-            confs.append(conf)
-        return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+            return loc, conf
+        else:
+            for i, x in enumerate(xs):
+                loc = self.list_localized_head[i](x) # if isinstance(self.list_localized_head, nn.ModuleList) else self.Loc(x)
+                loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
+                locs.append(loc)
 
-    def segmentation_prediction(self, xs):
+                conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
+                conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
+                confs.append(conf)
+            return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+
+    def segmentation_prediction(self, xs, is_eval):
         list_seg_hat = []
-        for x in xs:
+        if is_eval:
+            x = xs[-1]
             out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
             out = self.segmentation_head(out)
-            list_seg_hat.append(out)
-        return list_seg_hat
+            return out
+        else:
+            for x in xs:
+                out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
+                out = self.segmentation_head(out)
+                list_seg_hat.append(out)
+            return list_seg_hat
 
     def config300(self, x4=False):
         config = {
