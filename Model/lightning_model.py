@@ -35,6 +35,13 @@ class LightningModelPairNet(pl.LightningModule):
         optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         return [optimizer]
 
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        optimizer.step(closure=optimizer_closure)
+        if self.trainer.global_step > 60:
+            lr_scale = 0.1
+            for pg in optimizer.param_groups:
+                pg["lr"] = lr_scale * self.lr
+
     def training_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
         # y_h = torch.stack(y_h).reshape(-1,)
@@ -45,22 +52,26 @@ class LightningModelPairNet(pl.LightningModule):
 
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         # seg_loss = self.seg_criterion(seg_hat, seg_labels)
-        seg_loss = 0.0
+        seg_loss = 0
         for seg_h in seg_hat:
-          try:
+            # try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
-          except IndexError:
-            seg_loss_temp = self.seg_criterion(seg_h, seg_labels * 21/255)
-          if not torch.isnan(seg_loss_temp):
             seg_loss += seg_loss_temp
-        # print(seg_loss)
+            # except IndexError:
+                # print(seg_labels)
+                # print(seg_labels.shape, seg_h.shape)
+                # seg_labels = torch.as_tensor(seg_labels * 20/254, dtype=torch.long)
+                # print(seg_labels)
+                # seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
+            # if not torch.isnan(seg_loss_temp):
+                # seg_loss += seg_loss_temp
         loss = loc_loss + det_loss + seg_loss
 
         return {
                 'loss':loss, 
                 'train_loc_loss': det_loss.item(),
                 'train_det_loss': det_loss.item(),
-                'train_seg_loss': seg_loss,
+                'train_seg_loss': seg_loss.item(),
             }
     
     def training_epoch_end(self, outputs):
@@ -82,10 +93,10 @@ class LightningModelPairNet(pl.LightningModule):
 
         seg_loss = 0
         for seg_h in seg_hat:
-          try:
-            seg_loss += self.seg_criterion(seg_h, seg_labels)
-          except IndexError:
-            seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
+          #try:
+          seg_loss += self.seg_criterion(seg_h, seg_labels)
+          #except IndexError:
+          #  seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
         # print(loc_hat.shape)
         # print(bboxes.shape)
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
@@ -95,7 +106,7 @@ class LightningModelPairNet(pl.LightningModule):
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss':seg_loss.item()
+                'val_seg_loss':seg_loss
             }
 
     def validation_epoch_end(self, outputs):
