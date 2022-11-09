@@ -1028,6 +1028,10 @@ class Resize(object):
             T.Resize(size),
             T.ToTensor()
         ]) 
+        self.transform_seg = T.Compose([
+          T.Resize(size),
+          T.ToTensor()
+        ])
         # self.mode = mode
         # self.anchor = anchor
         # self.random = random_state
@@ -1044,10 +1048,15 @@ class Resize(object):
         # img = HalfBlood(img, self.anchor, resize, purer)
         img = self.transform(img).numpy().transpose(2, 1, 0)
         if cds is not None and seg is not None:
-            seg = seg.astype(np.int32)
+            # seg = seg.astype(np.int32)
             s_x = tw / float(w)
             s_y = th / float(h)
-            seg = self.transform(seg).numpy().transpose(2, 1, 0)
+            try:
+              seg = self.transform_seg(seg).numpy().transpose(2, 1, 0).squeeze(2)*255
+              seg = seg.astype(np.int)
+            except:
+              seg = seg.astype(np.int32)
+              seg = self.transform(seg).numpy().transpose(2, 1, 0)
             # seg = HalfBlood(seg, self.anchor, resize, purer)
             return img, np.array([[s_x * x, s_y * y] for x, y in cds]), seg
         else:

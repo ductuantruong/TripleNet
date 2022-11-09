@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 import torch.utils.data
 from utils.transform import *
+import torchvision.transforms as T
 
 
 class VOC(object):
@@ -153,18 +154,25 @@ class VOCDataset(torch.utils.data.Dataset):
 
         img = cv2.imread(self._imgpath % img_id)[:, :, ::-1]
         bboxes, det_labels = self.parse_annotation(self._annopath % img_id)
-        
+        bboxes, det_labels = self.filter(img, bboxes, det_labels)
+
 
         if os.path.exists(self._segpath  % img_id):
             seg_labels = Image.open(self._segpath % img_id)
-            seg_labels = np.array(seg_labels, dtype=np.uint8)
+            transform = T.Compose([
+              T.Resize((300,300)),
+              T.ToTensor()
+            ]) 
+            seg_labels = transform(seg_labels).numpy().transpose(2, 1, 0)*255
+            if self.transform is not None:
+              img, bboxes, _ = self.transform(img, bboxes, seg_labels)
+            # seg_labels = np.array(seg_labels, dtype=np.uint8)
         else:
             seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255
-        bboxes, det_labels = self.filter(img, bboxes, det_labels)
-        if self.transform is not None:
-            img, bboxes, seg_labels = self.transform(img, bboxes, seg_labels)
-        bboxes, det_labels = self.filter(img, bboxes, det_labels)
+            if self.transform is not None:
+              img, bboxes, seg_labels = self.transform(img, bboxes, seg_labels)
         
+        bboxes, det_labels = self.filter(img, bboxes, det_labels)
         if self.target_transform is not None:
             bboxes, det_labels = self.target_transform(bboxes, det_labels)
 
