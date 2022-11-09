@@ -331,9 +331,14 @@ class LightningModelTripleNet(pl.LightningModule):
     # Converts given original ground truth labels to class agnostic version
     def convert_to_class_agnost(self, seg_labels):
 
-
-        # TODO
-        # torch.set_printoptions(threshold=10_000)
+        # torch.set_printoptions(profile="full")
         # print(seg_labels)
 
-        return seg_labels
+        # Change Bg to '0' Class and non-Bg to '1' class
+        seg_labels_class_agnost = seg_labels.clone()
+        seg_labels_class_agnost[seg_labels==255] = 0
+        seg_labels_class_agnost[seg_labels!=255] = 1
+
+        #print(seg_labels_class_agnost)
+
+        return seg_labels_class_agnost
