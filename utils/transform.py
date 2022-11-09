@@ -1044,7 +1044,7 @@ class Resize(object):
         # img = HalfBlood(img, self.anchor, resize, purer)
         img = self.transform(img).numpy().transpose(2, 1, 0)
         if cds is not None and seg is not None:
-            seg = seg.astype(np.uint8)
+            seg = seg.astype(np.int32)
             s_x = tw / float(w)
             s_y = th / float(h)
             seg = self.transform(seg).numpy().transpose(2, 1, 0)
