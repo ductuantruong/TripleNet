@@ -178,6 +178,7 @@ class LightningModelTripleNet(pl.LightningModule):
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
 
         self.lr = HPARAMS['lr']
+        self.n_classes = HPARAMS['n_classes']
         print(f"Model Details: #Params = {self.count_total_parameters()}\t#Trainable Params = {self.count_trainable_parameters()}")
 
     def count_total_parameters(self):
@@ -413,9 +414,10 @@ class LightningModelTripleNet(pl.LightningModule):
     # Converts given original ground truth labels to class agnostic version
     def convert_to_class_agnost(self, seg_labels):
 
-        # Change Bg to '0' Class and non-Bg to '1' class
+        # Bg Class remain at '0'
+        # All other classes set to '1'
         seg_labels_class_agnost = seg_labels.clone()
-        seg_labels_class_agnost[seg_labels==255] = 0
-        seg_labels_class_agnost[seg_labels!=255] = 1
+        for i in range(1,self.n_classes + 1):
+            seg_labels_class_agnost[seg_labels_class_agnost == i] = 1
 
         return seg_labels_class_agnost

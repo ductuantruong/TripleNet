@@ -125,7 +125,7 @@ class InnerConnectedModule(nn.Module):
 
         # Conv for seg output
         self.seg_head = nn.Sequential(
-            nn.Conv2d(in_channels, n_classes, kernel_size=3, stride=stride, padding=1)
+            nn.Conv2d(in_channels, n_classes + 1, kernel_size=3, stride=stride, padding=1)
         )
 
         # Conv before concat with skip connection
@@ -394,7 +394,7 @@ class TripleNet(nn.Module):
 
         # Multi-scale Fused Segmentation
         self.msf_seg_head = nn.Sequential(
-            nn.Conv2d(512*n_decoder_output, self.n_classes, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(512*n_decoder_output, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
         )
 
         # Class-agnostic segmentation
