@@ -398,7 +398,7 @@ class TripleNet(nn.Module):
         )
 
         # Class-agnostic segmentation
-        self.list_clsagnos_seg_head = nn.Sequential(
+        self.clsag_seg_head = nn.Sequential(
             nn.Conv2d(512, 2, kernel_size=3, stride=1, padding=1)
         )
 
@@ -413,7 +413,7 @@ class TripleNet(nn.Module):
                 module.weight.data.fill_(1)
                 module.bias.data.zero_()
     
-    def forward(self, x):
+    def forward(self, x, is_eval=False):
         list_encoder_embedding = list()
         
         x = self.conv1(x)
@@ -437,26 +437,46 @@ class TripleNet(nn.Module):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        # Inner Connected Module Output
-        locs = []
-        confs = []
-        list_seg_hat_class_aware = []
-        for i, decoder_embedding in enumerate(list_decoder_embedding):
-            seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
-            locs.append(loc_out)
-            confs.append(conf_out)
-            list_seg_hat_class_aware.append(seg_out)
-
-        loc_hat = torch.cat(locs, dim=1)
-        conf_hat = torch.cat(confs, dim=1)
-
         # Multi-scale fused Segmentation
-        msf_seg_hat = self.msf_seg_prediction(list_decoder_embedding)
+        seg_hat_msf = self.msf_seg_prediction(list_decoder_embedding)
+        
+        if is_eval:
+            # Evaluation
+            
+            # Inner Connected Module Output
+            decoder_embedding = list_decoder_embedding[-1]
+            seg_out, conf_out, loc_out = self.list_inner_conn_modules[-1](decoder_embedding)
 
-        # Class-agnostic segmentation
-        list_seg_hat_class_agnost = self.class_agnos_seg_prediction(list_decoder_embedding)
+            loc_hat = loc_out
+            conf_hat = conf_out
+            seg_hat = seg_out
 
-        return loc_hat, conf_hat, msf_seg_hat, list_seg_hat_class_aware, list_seg_hat_class_agnost
+            # Class-agnostic segmentation
+            seg_hat_clsag = self.class_agnos_seg_prediction(list_decoder_embedding, is_eval)
+
+            return loc_hat, conf_hat, seg_hat, seg_hat_msf, seg_hat_clsag
+        else:
+            #Training
+
+            # Inner Connected Module Output
+            locs = []
+            confs = []
+            list_seg_hat = []
+            for i, decoder_embedding in enumerate(list_decoder_embedding):
+                seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
+                locs.append(loc_out)
+                confs.append(conf_out)
+                list_seg_hat.append(seg_out)
+
+            loc_hat = torch.cat(locs, dim=1)
+            conf_hat = torch.cat(confs, dim=1)
+
+            # Class-agnostic segmentation
+            list_seg_hat_clsag = self.class_agnos_seg_prediction(list_decoder_embedding, is_eval)
+
+            return loc_hat, conf_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag
+
+
 
     # Multi-scale Fused Segmentation 
     def msf_seg_prediction(self, xs):
@@ -470,14 +490,24 @@ class TripleNet(nn.Module):
         return msf_seg_hat
 
     # Class-agnostic segmentation
-    def class_agnos_seg_prediction(self, xs):
-        list_seg_hat_cls_agnos = []
-        for i, x in enumerate(xs):
-            out = self.list_clsagnos_seg_head(x)
-            out = F.interpolate(out, size=self.image_size, mode='bilinear', align_corners=True)
-            list_seg_hat_cls_agnos.append(out)
+    def class_agnos_seg_prediction(self, xs, is_eval):
         
-        return list_seg_hat_cls_agnos
+        if is_eval:
+            # Evaluation
+            x = xs[-1]
+            seg_hat_cls_agnos = self.clsag_seg_head(x)
+            seg_hat_cls_agnos = F.interpolate(out, size=self.image_size, mode='bilinear', align_corners=True)
+
+            return seg_hat_cls_agnos
+        else:
+            # Training
+            list_seg_hat_cls_agnos = []
+            for i, x in enumerate(xs):
+                out = self.clsag_seg_head(x)
+                out = F.interpolate(out, size=self.image_size, mode='bilinear', align_corners=True)
+                list_seg_hat_cls_agnos.append(out)
+            
+            return list_seg_hat_cls_agnos
 
     def config300(self, x4=False):
         config = {

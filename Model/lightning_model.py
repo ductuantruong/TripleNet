@@ -201,31 +201,38 @@ class LightningModelTripleNet(pl.LightningModule):
                 pg["lr"] = lr_scale * self.lr
 
     def training_step(self, batch, batch_idx):
-        img, bboxes, det_labels, seg_labels_class_aware = batch
+        img, bboxes, det_labels, seg_labels = batch
 
-        loc_hat, det_hat, msf_seg_hat, list_seg_hat_class_aware, list_seg_hat_class_agnost = self(img)
+        loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
 
+        # Loc and Det Loss
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
-        seg_loss_class_aware = 0.0
-        for seg_h in list_seg_hat_class_aware:
-            seg_loss_class_aware += self.seg_criterion(seg_h, seg_labels_class_aware)
+        # Loss for Multi-scaled Fusion
+        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
 
-        seg_labels_class_agnost = self.convert_to_class_agnost(seg_labels_class_aware)
-        seg_loss_class_agnost = 0.0
-        for seg_h in list_seg_hat_class_agnost:
-            seg_loss_class_agnost += self.seg_criterion(seg_h, seg_labels_class_agnost)
+        # Loss for standard segmentation (per layer/class aware)
+        seg_loss = 0.0
+        for seg_h in list_seg_hat:
+            seg_loss += self.seg_criterion(seg_h, seg_labels)
+
+        # Loss for class agnostic segmentation
+        seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
+        seg_loss_clsag = 0.0
+        for seg_h in list_seg_hat_clsag:
+            seg_loss_clsag += self.seg_criterion(seg_h, seg_labels_clsag)
         
 
-        loss = loc_loss + det_loss + seg_loss_class_aware + seg_loss_class_agnost
+        loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
 
 
         return {
                 'loss':loss, 
-                'train_loc_loss': det_loss.item(),
+                'train_loc_loss': loc_loss.item(),
                 'train_det_loss': det_loss.item(),
-                'train_seg_loss_class_aware': seg_loss_class_aware.item(),
-                'train_seg_loss_class_agnost': seg_loss_class_agnost.item(),
+                'train_seg_loss': seg_loss,
+                'train_seg_loss_msf': seg_loss_msf.item(),
+                'train_seg_loss_clsag': seg_loss_clsag,
             }
     
     def training_epoch_end(self, outputs):
@@ -233,39 +240,50 @@ class LightningModelTripleNet(pl.LightningModule):
         loss = torch.tensor([x['loss'] for x in outputs]).mean()
         loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
-        seg_loss_class_aware = torch.tensor([x['train_seg_loss_class_aware'] for x in outputs]).sum()/n_batch
-        seg_loss_class_agnost = torch.tensor([x['train_seg_loss_class_agnost'] for x in outputs]).sum()/n_batch
+        seg_loss = torch.tensor([x['train_seg_loss'] for x in outputs]).sum()/n_batch
+        seg_loss_msf = torch.tensor([x['train_seg_loss_msf'] for x in outputs]).sum()/n_batch
+        seg_loss_clsag = torch.tensor([x['train_seg_loss_clsag'] for x in outputs]).sum()/n_batch
 
         self.log('train/loss' , loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/seg_class_aware', seg_loss_class_aware.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/seg_class_agnost', seg_loss_class_agnost.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('train/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('train/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('train/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
-        img, bboxes, det_labels, seg_labels_class_aware = batch
+        img, bboxes, det_labels, seg_labels = batch
         
-        loc_hat, det_hat, msf_seg_hat, list_seg_hat_class_aware, list_seg_hat_class_agnost = self(img)
+        loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
 
+        # Loc and Det Loss
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
-        seg_loss_class_aware = 0
-        for seg_h in list_seg_hat_class_aware:
-            seg_loss_class_aware += self.seg_criterion(seg_h, seg_labels_class_aware)
+        # Loss for Multi-scaled Fusion
+        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
 
-        seg_labels_class_agnost = self.convert_to_class_agnost(seg_labels_class_aware)
-        seg_loss_class_agnost = 0.0
-        for seg_h in list_seg_hat_class_agnost:
-            seg_loss_class_agnost += self.seg_criterion(seg_h, seg_labels_class_agnost)
+        # Loss for standard segmentation (per layer/class aware)
+        seg_loss = 0.0
+        for seg_h in list_seg_hat:
+            seg_loss += self.seg_criterion(seg_h, seg_labels)
 
-        val_loss = loc_loss + det_loss + seg_loss_class_aware + seg_loss_class_agnost
+        # Loss for class agnostic segmentation
+        seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
+        seg_loss_clsag = 0.0
+        for seg_h in list_seg_hat_clsag:
+            seg_loss_clsag += self.seg_criterion(seg_h, seg_labels_clsag)
+        
+
+        val_loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
+
 
         return {
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss_class_aware':seg_loss_class_aware.item(),
-                'val_seg_loss_class_agnost':seg_loss_class_agnost.item()
+                'val_seg_loss':seg_loss,
+                'val_seg_loss_msf':seg_loss_msf.item(),
+                'val_seg_labels_clsag':seg_labels_clsag
             }
 
     def validation_epoch_end(self, outputs):
@@ -273,36 +291,44 @@ class LightningModelTripleNet(pl.LightningModule):
         val_loss = torch.tensor([x['val_loss'] for x in outputs]).mean()
         loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
-        seg_loss_class_aware = torch.tensor([x['val_seg_loss_class_aware'] for x in outputs]).sum()/n_batch
-        seg_loss_class_agnost = torch.tensor([x['val_seg_loss_class_agnost'] for x in outputs]).sum()/n_batch
+        seg_loss = torch.tensor([x['val_seg_loss'] for x in outputs]).sum()/n_batch
+        seg_loss_msf = torch.tensor([x['val_seg_loss_msf'] for x in outputs]).sum()/n_batch
+        seg_loss_clsag = torch.tensor([x['val_seg_loss_clsag'] for x in outputs]).sum()/n_batch
 
         self.log('val/loss' , val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/seg_class_aware', seg_loss_class_aware.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/seg_class_agnost', seg_loss_class_agnost.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
-        img, bboxes, det_labels, seg_labels_class_aware = batch
+        img, bboxes, det_labels, seg_labels = batch
         
-        loc_hat, det_hat, msf_seg_hat, list_seg_hat_class_aware, list_seg_hat_class_agnost = self(img)
+        loc_hat, det_hat, seg_hat, seg_hat_msf, seg_hat_clsag= self(img, is_eval = True)
 
+        # Loc and Det Losss
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        seg_loss_class_aware = self.seg_criterion(msf_seg_hat, seg_labels_class_aware)
 
-        seg_labels_class_agnost = self.convert_to_class_agnost(seg_labels_class_aware)
-        seg_loss_class_agnost = 0.0
-        for seg_h in list_seg_hat_class_agnost:
-            seg_loss_class_agnost += self.seg_criterion(seg_h, seg_labels_class_agnost)
+        # Loss for Multi-scaled Fusion
+        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
 
-        loss = loc_loss + det_loss + seg_loss_class_aware + seg_loss_class_agnost
+        # Loss for standard segmentation (final layer, class aware)
+        seg_loss = self.seg_criterion(seg_hat, seg_labels)
+
+        # Loss for class agnostic segmentation
+        seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
+        seg_loss_clsag = self.seg_criterion(seg_hat_clsag, seg_labels_clsag)
+
+        loss = loc_loss + det_loss + seg_loss + seg_loss_msf + seg_loss_clsag
 
         return {
                 'test_loss':loss, 
                 'test_loc_loss':loc_loss.item(),
                 'test_det_loss':det_loss.item(),
-                'test_seg_loss_class_aware':seg_loss_class_aware.item(),
-                'test_seg_loss_class_agnost':seg_loss_class_agnost.item()
+                'test_seg_loss':seg_loss.item(),
+                'test_seg_loss_msf':seg_loss_msf.item(),
+                'test_seg_loss_clsag':seg_loss_clsag.item()
             }
 
 
@@ -311,22 +337,25 @@ class LightningModelTripleNet(pl.LightningModule):
         test_loss = torch.tensor([x['test_loss'] for x in outputs]).mean()
         loc_loss = torch.tensor([x['test_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['test_det_loss'] for x in outputs]).sum()/n_batch
-        seg_loss_class_aware = torch.tensor([x['test_seg_loss_class_aware'] for x in outputs]).sum()/n_batch
-        seg_loss_class_agnost = torch.tensor([x['test_seg_loss_class_agnost'] for x in outputs]).sum()/n_batch
+        seg_loss = torch.tensor([x['test_seg_loss'] for x in outputs]).sum()/n_batch
+        seg_loss_msf = torch.tensor([x['test_seg_loss_msf'] for x in outputs]).sum()/n_batch
+        seg_loss_clsag = torch.tensor([x['test_seg_loss_clsag'] for x in outputs]).sum()/n_batch
 
         self.log('test/loss', test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('test/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('test/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg_class_aware', seg_loss_class_aware.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg_class_agnost', seg_loss_class_agnost.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
 
 
         pbar = {
                 'test/loss':test_loss.item(),
                 'test/loc':loc_loss.item(),
                 'test/det':det_loss.item(),
-                'test/seg_class_aware':seg_loss_class_aware.item(),
-                'test/seg_class_agnost':seg_loss_class_agnost.item()
+                'test/seg':seg_loss.item(),
+                'test/seg_msf':seg_loss_msf.item(),
+                'test/seg_clsag':seg_loss_clsag.item()
             }
         self.logger.log_hyperparams(pbar)
         self.log_dict(pbar)
@@ -334,14 +363,9 @@ class LightningModelTripleNet(pl.LightningModule):
     # Converts given original ground truth labels to class agnostic version
     def convert_to_class_agnost(self, seg_labels):
 
-        # torch.set_printoptions(profile="full")
-        # print(seg_labels)
-
         # Change Bg to '0' Class and non-Bg to '1' class
         seg_labels_class_agnost = seg_labels.clone()
         seg_labels_class_agnost[seg_labels==255] = 0
         seg_labels_class_agnost[seg_labels!=255] = 1
-
-        #print(seg_labels_class_agnost)
 
         return seg_labels_class_agnost
