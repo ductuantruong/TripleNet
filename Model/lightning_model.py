@@ -209,18 +209,34 @@ class LightningModelTripleNet(pl.LightningModule):
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
         # Loss for Multi-scaled Fusion
-        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
+        seg_loss_msf = torch.tensor([0.0])
+        try:
+            seg_loss_tmp = self.seg_criterion(seg_hat_msf, seg_labels)
+            if not torch.isnan(seg_loss_tmp):
+                seg_loss_msf = seg_loss_tmp
+        except IndexError:
+            pass
 
         # Loss for standard segmentation (per layer/class aware)
         seg_loss = 0.0
         for seg_h in list_seg_hat:
-            seg_loss += self.seg_criterion(seg_h, seg_labels)
+            try:
+                seg_loss_tmp = self.seg_criterion(seg_h, seg_labels)
+                if not torch.isnan(seg_loss_tmp):
+                    seg_loss += seg_loss_tmp
+            except IndexError:
+                continue
 
         # Loss for class agnostic segmentation
         seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
         seg_loss_clsag = 0.0
         for seg_h in list_seg_hat_clsag:
-            seg_loss_clsag += self.seg_criterion(seg_h, seg_labels_clsag)
+            try:
+                seg_loss_tmp = self.seg_criterion(seg_h, seg_labels_clsag)
+                if not torch.isnan(seg_loss_tmp):
+                    seg_loss_clsag += seg_loss_tmp
+            except IndexError:
+                continue
         
 
         loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
@@ -260,18 +276,34 @@ class LightningModelTripleNet(pl.LightningModule):
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
         # Loss for Multi-scaled Fusion
-        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
+        seg_loss_msf = torch.tensor([0.0])
+        try:
+            seg_loss_tmp = self.seg_criterion(seg_hat_msf, seg_labels)
+            if not torch.isnan(seg_loss_tmp):
+                seg_loss_msf = seg_loss_tmp
+        except IndexError:
+            pass
 
         # Loss for standard segmentation (per layer/class aware)
         seg_loss = 0.0
         for seg_h in list_seg_hat:
-            seg_loss += self.seg_criterion(seg_h, seg_labels)
+            try:
+                seg_loss_tmp = self.seg_criterion(seg_h, seg_labels)
+                if not torch.isnan(seg_loss_tmp):
+                    seg_loss += seg_loss_tmp
+            except IndexError:
+                return
 
         # Loss for class agnostic segmentation
         seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
         seg_loss_clsag = 0.0
         for seg_h in list_seg_hat_clsag:
-            seg_loss_clsag += self.seg_criterion(seg_h, seg_labels_clsag)
+            try:
+                seg_loss_tmp = self.seg_criterion(seg_h, seg_labels_clsag)
+                if not torch.isnan(seg_loss_tmp):
+                    seg_loss_clsag += seg_loss_tmp
+            except IndexError:
+                return
         
 
         val_loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
@@ -311,14 +343,32 @@ class LightningModelTripleNet(pl.LightningModule):
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
         # Loss for Multi-scaled Fusion
-        seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
+        seg_loss_msf = torch.tensor([0.0])
+        try:
+            seg_loss_tmp = self.seg_criterion(seg_hat_msf, seg_labels)
+            if not torch.isnan(seg_loss_tmp):
+                seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
+        except IndexError:
+            pass
 
         # Loss for standard segmentation (final layer, class aware)
-        seg_loss = self.seg_criterion(seg_hat, seg_labels)
+        seg_loss = torch.tensor([0.0])
+        try:
+            seg_loss_tmp = self.seg_criterion(seg_hat, seg_labels)
+            if not torch.isnan(seg_loss_tmp):
+                seg_loss = seg_loss_tmp
+        except IndexError:
+            pass
 
         # Loss for class agnostic segmentation
         seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
-        seg_loss_clsag = self.seg_criterion(seg_hat_clsag, seg_labels_clsag)
+        seg_loss_clsag = torch.tensor([0.0])
+        try:
+            seg_loss_tmp = self.seg_criterion(seg_hat_clsag, seg_labels_clsag)
+            if not torch.isnan(seg_loss_tmp):
+                seg_loss_clsag = seg_loss_tmp
+        except IndexError:
+            pass
 
         loss = loc_loss + det_loss + seg_loss + seg_loss_msf + seg_loss_clsag
 
