@@ -130,7 +130,7 @@ class InnerConnectedModule(nn.Module):
 
         # Conv before concat with skip connection
         self.conv1 = nn.Sequential(
-            nn.Conv2d(n_classes, 48, kernel_size=3, stride=stride, padding=1),
+            nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
             nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
             nn.Conv2d(48, 128, kernel_size=3, stride=stride, padding=1),
