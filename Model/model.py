@@ -122,7 +122,7 @@ class PairNet(nn.Module):
             self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes + 1), 3, padding=1))
 
         self.segmentation_head = nn.Sequential(
-            nn.Conv2d(512, self.n_classes, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
         )
 
 

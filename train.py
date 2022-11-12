@@ -41,10 +41,10 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(add_help=True)
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
     parser.add_argument('--n_classes', type=int, default=20)
@@ -146,7 +146,7 @@ if __name__ == "__main__":
         ],
         logger=logger,
         resume_from_checkpoint=cfg['model_checkpoint'],
-        # distributed_backend='ddp',
+        distributed_backend='ddp',
         auto_lr_find=True
     )
     
