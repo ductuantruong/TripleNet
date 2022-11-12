@@ -5,6 +5,7 @@ import numpy as np
 # scipy.ndimage -> skimage -> cv2, 
 # skimage is one or two orders of magnitude slower than cv2
 import cv2
+from PIL import Image
 
 try:
     import torch
@@ -16,6 +17,7 @@ import numbers
 import types
 
 import torchvision.transforms as T
+from torchvision.transforms.functional import InterpolationMode
 
 InterpolationFlags = {'nearest':cv2.INTER_NEAREST, 'linear':cv2.INTER_LINEAR, 
                        'cubic':cv2.INTER_CUBIC, 'area':cv2.INTER_AREA, 
@@ -666,7 +668,7 @@ class Resize(object):
         self.size = size
         self.transform = T.Compose([
             T.ToPILImage(),
-            T.Resize(size),
+            T.Resize(size, InterpolationMode.NEAREST),
             T.ToTensor()
         ]) 
         # self.mode = mode
@@ -674,22 +676,16 @@ class Resize(object):
         # self.random = random_state
 
     def __call__(self, img, cds=None, seg=None):
-        # interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                #    else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
 
-        h, w = img.shape[:2]
+        h, w, c = img.shape
         tw, th = self.size
 
-        # resize = lambda im: cv2.resize(im, (tw, th), interpolation=interp_mode)
-        # purer = lambda im: cv2.resize(im, (tw, th), interpolation=cv2.INTER_NEAREST)
-        # img = HalfBlood(img, self.anchor, resize, purer)
         img = self.transform(img).numpy().transpose(2, 1, 0)
         if cds is not None and seg is not None:
             seg = seg.astype(np.int32)
             s_x = tw / float(w)
             s_y = th / float(h)
             seg = self.transform(seg).numpy().transpose(2, 1, 0)
-            # seg = HalfBlood(seg, self.anchor, resize, purer)
             return img, np.array([[s_x * x, s_y * y] for x, y in cds]), seg
         else:
             return img
