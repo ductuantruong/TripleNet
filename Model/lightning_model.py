@@ -43,35 +43,23 @@ class LightningModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
-        # y_h = torch.stack(y_h).reshape(-1,)
-        # y_a = torch.stack(y_a).reshape(-1,)
-        # y_g = torch.stack(y_g).reshape(-1,)
         
         loc_hat, det_hat, seg_hat = self(img)
 
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        # seg_loss = self.seg_criterion(seg_hat, seg_labels)
         seg_loss = 0
         for seg_h in seg_hat:
-            # try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
             if not torch.isnan(seg_loss_temp):
                 seg_loss += seg_loss_temp
-            # except IndexError:
-                # print(seg_labels)
-                # print(seg_labels.shape, seg_h.shape)
-                # seg_labels = torch.as_tensor(seg_labels * 20/254, dtype=torch.long)
-                # print(seg_labels)
-                # seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
-            # if not torch.isnan(seg_loss_temp):
-                # seg_loss += seg_loss_temp
+
         loss = loc_loss + det_loss + seg_loss
 
         return {
                 'loss':loss, 
                 'train_loc_loss': det_loss.item(),
                 'train_det_loss': det_loss.item(),
-                'train_seg_loss': seg_loss,
+                'train_seg_loss': seg_loss.item(),
             }
     
     def training_epoch_end(self, outputs):
@@ -108,7 +96,7 @@ class LightningModel(pl.LightningModule):
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss':seg_loss
+                'val_seg_loss':seg_loss.item()
             }
 
     def validation_epoch_end(self, outputs):
@@ -125,9 +113,6 @@ class LightningModel(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
-        y_h = torch.stack(y_h).reshape(-1,)
-        y_a = torch.stack(y_a).reshape(-1,)
-        y_g = torch.stack(y_g).reshape(-1,)
         
         loc_hat, det_hat, seg_hat = self(img)
 
