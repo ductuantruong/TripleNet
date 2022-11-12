@@ -15,7 +15,7 @@ import random
 from numpy.random import RandomState
 import numpy as np
 
-from Model.lightning_model import LightningModelPairNet
+from Model.lightning_model import LightningModelPairNet, LightningModelTripleNet
 
 from Dataset.dataset import VOC, VOCDataset
 
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         offline=True
     )
 
-    model = LightningModelPairNet(cfg)
+    model = LightningModelTripleNet(cfg)
 
     model_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
