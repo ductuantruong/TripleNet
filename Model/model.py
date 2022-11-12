@@ -506,7 +506,7 @@ class TripleNet(nn.Module):
         config = {
             'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6', 'res7'],
             'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
-            'name': 'PairNet300-resnet50-Det' + '-s4' if x4 else '-s8',
+            'name': 'TripleNet300-resnet50-Det' + '-s4' if x4 else '-s8',
             'image_size': 300,
             'grids': [75]*x4 + [38, 19, 10, 5, 3, 1],
             'sizes': [s / 300. for s in [30, 60, 111, 162, 213, 264, 315]],
@@ -523,7 +523,7 @@ class TripleNet(nn.Module):
             'skip_layers': ['layer1', 'layer2', 'layer3', 'layer4', 'layer5', 'layer6', 'layer7', 'layer8'],
             'pred_layers': ['rev_layer7', 'rev_layer6', 'rev_layer5', 'rev_layer4', 'rev_layer3', 'rev_layer2'] + (
                             ['rev_layer1']*x4),
-            'name': 'PairNet512-resnet50-Det' + '-s4' if x4 else '-s8',
+            'name': 'TripleNet512-resnet50-Det' + '-s4' if x4 else '-s8',
             'image_size': 512,
             'grids': [128]*x4 + [64, 32, 16, 8, 4, 2, 1],
             'sizes': [s / 512. for s in [20.48, 61.2, 133.12, 215.04, 296.96, 378.88, 460.8, 542.72]],
