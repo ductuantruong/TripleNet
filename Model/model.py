@@ -13,13 +13,13 @@ class BottleneckBlock(nn.Module):
         super(BottleneckBlock, self).__init__()
         self.conv1 = nn.Conv2d(inchannels, inchannels//4, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(inchannels//4)
-        self.conv2 = nn.Conv2d(inchannels//4, inchannels//4, kernel_size=3, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(inchannels//4, inchannels//4, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(inchannels//4)
-        self.conv3 = nn.Conv2d(inchannels//4, inchannels, 1, bias=False)
+        self.conv3 = nn.Conv2d(inchannels//4, inchannels, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(inchannels)
         self.relu = nn.ReLU(inplace=True)
         self.shorcut = nn.Sequential(
-                nn.Conv2d(inchannels, inchannels, kernel_size=1, bias=False),
+                nn.Conv2d(inchannels, inchannels, kernel_size=1, stride=2, bias=False),
                 nn.BatchNorm2d(inchannels))
     
     def forward(self, x):
@@ -183,7 +183,6 @@ class PairNet(nn.Module):
 
         self.Base = resnet50(pretrained=True)
 
-
         self.resnet = resnet50(pretrained=True)
         self.conv1 = nn.Sequential(*list(self.resnet.children())[:4])
         self.res1_4 = nn.Sequential(OrderedDict([
@@ -197,11 +196,7 @@ class PairNet(nn.Module):
             ('res6', BottleneckBlock(2048)),
             ('res7', BottleneckBlock(2048))])
         )
-        # self.res5_7 = nn.Sequential(OrderedDict([
-        #     ('res5', list(self.resnet.children())[7]),
-        #     ('res6', list(self.resnet.children())[8]),
-        #     ('res7', list(self.resnet.children())[9])])
-        # )
+
         self._initialize_weights(self.res5_7)
 
         self.encoder = nn.Sequential(self.res1_4, self.res5_7)
@@ -210,13 +205,11 @@ class PairNet(nn.Module):
 
         self.decoder = nn.Sequential(OrderedDict([
             ('decoder1', DecoderLayer(2048, 2048, 512)),
-            ('decoder2', DecoderLayer(512, 2048, 512)),
+            ('decoder2', DecoderLayer(512,  2048, 512)),
             ('decoder3', DecoderLayer(512,  2048, 512)),
             ('decoder4', DecoderLayer(512,  1024, 512)),
-            ('decoder5', DecoderLayer(512,  512, 512))]
+            ('decoder5', DecoderLayer(512,  512,  512))]
         ))
-            # ('decoder_layer2', DecoderLayer(512,  512,  512)),
-            # ('decoder_layer1', DecoderLayer(512,  256,  512))]))
 
         n_boxes = len(self.config['aspect_ratios']) + 1
         self.list_localized_head = nn.ModuleList([])
