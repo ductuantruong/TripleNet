@@ -138,24 +138,6 @@ def transforms_state(ts, **kwargs):
             transforms.append(transform_state(t, **kwargs))
     return transforms
 
-
-
-# Operators
-'''
-class Clamp(object):
-    def __init__(self, min=0, max=255, soft=True, dtype='uint8'):
-        self.min, self.max = min, max
-        self.dtype = dtype
-        self.soft = soft
-        self.thresh =
-
-    def __call__(self, img):
-        if self.soft is None:
-            return _clamp(img, min=self.min, max=self.max, dtype=self.dtype)
-        else:
-'''
-
-
 class Unsqueeze(object):
     def __call__(self, img):
         if img.ndim == 2:
@@ -236,13 +218,7 @@ def HalfBlood(img, anchor, f1, f2):
             img = img[..., np.newaxis]
         return img
 
-
-
-
-
 # Photometric Transform
-
-
 class RGB2BGR(object):
     def __call__(self, img):
         assert img.ndim == 3 and img.shape[2] == 3
@@ -432,117 +408,6 @@ class FancyPCA(object):
         print(self.pca)
 
 
-class ShuffleChannels(object):
-    def __init__(self, prob=1., random_state=np.random):
-        self.prob = prob
-        self.random = random_state 
-
-    def __call__(self, img):
-        if self.prob < 1 and self.random.random_sample() >= self.prob:
-            return img 
-
-        assert img.ndim == 3
-        permut = self.random.permutation(img.shape[2])
-        img = img[:, :, permut]
-
-        return img
-
-
-# "Improved Regularization of Convolutional Neural Networks with Cutout". (arXiv:1708.04552)
-# fill with 0(if image is normalized) or dataset's per-channel mean.
-class Cutout(object):
-    def __init__(self, size, fillval=0, prob=0.5, random_state=np.random): 
-        if isinstance(size, numbers.Number):
-            size = (int(size), int(size))
-        self.size = size
-        
-        self.fillval = fillval
-        self.prob = prob
-        self.random = random_state
-
-    def __call__(self, img):
-        if self.random.random_sample() >= self.prob:
-            return img
-
-        h, w = img.shape[:2]
-        tw, th = self.size 
-
-        cx = self.random.randint(0, w)
-        cy = self.random.randint(0, h)
-
-        x1 = int(np.clip(cx -       tw / 2, 0, w - 1))
-        x2 = int(np.clip(cx + (tw + 1) / 2, 0, w    ))
-        y1 = int(np.clip(cy -       th / 2, 0, h - 1))
-        y2 = int(np.clip(cy + (th + 1) / 2, 0, h    ))
-
-        img[y1:y2, x1:x2] = self.fillval
-
-        return img
-
-
-# "Random Erasing Data Augmentation". (arXiv:1708.04896).  fill with random value
-class RandomErasing(object):
-    def __init__(self, area_range=(0.02, 0.2), ratio_range=[0.3, 1/0.3], fillval=None, 
-                 prob=0.5, num=1, anchor=None, random_state=np.random):
-        self.area_range = area_range
-        self.ratio_range = ratio_range
-        self.fillval = fillval
-        self.prob = prob
-        self.num = num
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img):
-        if self.random.random_sample() >= self.prob:
-            return img
-
-        h, w = img.shape[:2]
-
-        num = self.random.randint(self.num) + 1
-        count = 0
-        for _ in range(10):
-            area = h * w 
-            target_area = _loguniform(self.area_range, self.random) * area
-            aspect_ratio = _loguniform(self.ratio_range, self.random)
-
-            tw = int(round(np.sqrt(target_area * aspect_ratio)))
-            th = int(round(np.sqrt(target_area / aspect_ratio)))
-
-            if tw <= w and th <= h:
-
-                x1 = self.random.randint(0, w - tw + 1)
-                y1 = self.random.randint(0, h - th + 1)
-
-                fillval = self.random.randint(0, 256) if self.fillval is None else self.fillval
-
-                erase = lambda im: self._fill(im, (x1, y1, x1+tw, y1+th), fillval)
-                cut = lambda im: self._fill(im, (x1, y1, x1+tw, y1+th), 0)
-                img = HalfBlood(img, self.anchor, erase, cut)
-
-                count += 1
-            if count >= num:
-                return img
-
-        # Fallback
-        return img
-
-    def _fill(self, img, rect, val):
-        l, t, r, b = rect
-        img[t:b, l:r] = val
-        return img
-
-
-#GaussianBlur
-#MotionBlue
-#RadialBlur
-#ResizeBlur 
-#Sharpen
-
-
-
-
-# Geometric Transform
-
 def _expand(img, size, lt, val):
     h, w = img.shape[:2]
     nw, nh = size 
@@ -621,75 +486,6 @@ class Expand(object):
             return img
 
 
-# scales the smaller edge to given size
-class Scale(object):
-    def __init__(self, size, mode='linear', lazy=False, anchor=None, random_state=np.random):
-        assert isinstance(size, int)
-
-        self.size = int(size)
-        self.mode = mode
-        self.lazy = lazy
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        h, w = img.shape[:2]
-
-        if self.lazy and min(h, w) >= self.size:
-            return img if cds is None else (img, cds)
-
-        if h < w:
-            tw, th = int(self.size / float(h) * w), self.size
-        else:
-            th, tw = int(self.size / float(w) * h), self.size
-
-        # skimage.transform.resize 10x slower than cv2.resize
-        resize = lambda im: cv2.resize(im, (tw, th), interpolation=interp_mode)
-        purer = lambda im: cv2.resize(im, (tw, th), interpolation=cv2.INTER_NEAREST)
-        img = HalfBlood(img, self.anchor, resize, purer)
-
-        if cds is not None:
-            s_x, s_y = tw / float(w), th / float(h)
-            return img, np.array([[x * s_x, y * s_y] for x, y in cds])
-        else:
-            return img
-
-
-class RandomScale(object):
-    def __init__(self, size_range, mode='linear', anchor=None, random_state=np.random):
-        assert isinstance(size_range, collections.Sequence) and len(size_range) == 2
-
-        self.size_range = size_range
-        self.mode = mode
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        h, w = img.shape[:2]
-        size = int(self.random.uniform(*self.size_range))
-        
-        if h < w:
-            tw, th = int(size / float(h) * w), size
-        else:
-            th, tw = int(size / float(w) * h), size
-
-        resize = lambda im: cv2.resize(im, (tw, th), interpolation=interp_mode)
-        purer = lambda im: cv2.resize(im, (tw, th), interpolation=cv2.INTER_NEAREST)
-        img = HalfBlood(img, self.anchor, resize, purer)
-
-        if cds is not None:
-            s_x, s_y = tw / float(w), th / float(h)
-            return img, np.array([[x * s_x, y * s_y] for x, y in cds])
-        else:
-            return img
-
-
 class CenterCrop(object):
     def __init__(self, size):
         if isinstance(size, numbers.Number):
@@ -737,109 +533,6 @@ class RandomCrop(object):
         else:
             return img
 
-'''
-# "SSD: Single Shot MultiBox Detector". 
-# object-aware RandomCrop, crop multi-scale objects
-class ObjectRandomCrop(object):
-    def __init__(self, final_size=None, prob=1., random_state=np.random):
-        self.final_size = final_size   # reference size
-        self.final_area = (final_size * final_size if isinstance(final_size, numbers.Number) 
-                                    else np.prod(final_size))
-        self.prob = prob
-        self.random = random_state 
-
-        self.options = [
-            None,                # keep original size
-            #(-np.inf, 0.1),      # large crop
-            (0.02, 0.1),
-            (0.1, 0.3),
-            (0.3, 0.5),
-            (0.5, 0.7),
-            (0.7, np.inf),       # small crop
-            (-np.inf, np.inf),   # arbitrary size  
-        ]
-
-    def __call__(self, img, cbs):
-        h, w = img.shape[:2]
-
-        # ad-hoc
-        if len(cbs) == 0:
-            return img, cbs
-
-        if len(cbs[0]) == 4:
-            boxes = cbs
-        elif len(cbs[0]) == 2:
-            boxes = _to_bboxes(cbs, img.shape[:2])
-        else:
-            raise Exception('invalid input')
-
-        for attempt in range(30):
-            mode = self.random.choice(self.options)
-
-            if mode is None or (self.prob < 1 and self.random.random_sample() >= self.prob):
-                if self.final_size is not None:
-                    # area constraint
-                    box_areas = np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
-                    size = np.sqrt(box_areas * self.final_area / (h * w))
-                    if not ((11 < size) * (size < 18)).any() and size.max() > 22:
-                        return img, cbs
-                    mode = self.options[self.random.randint(1, len(self.options))]
-                else:
-                    return img, cbs
-
-            min_iou, max_iou = mode
-
-            for _ in range(50):
-                tw = self.random.uniform(0.3 * w, w)
-                th = self.random.uniform(0.3 * h, h)
-                if max(th / tw, tw / th) > 2:
-                    continue
-
-                x1 = self.random.randint(0, w - tw + 1)
-                y1 = self.random.randint(0, h - th + 1)
-
-                rect = np.array([int(x1), int(y1), int(x1+tw), int(y1+th)])
-                jaccard, coverage, inter = _jaccard(boxes, rect)
-
-                # iou constraint
-                if jaccard.max() < min_iou or jaccard.max() > max_iou:
-                    continue
-
-                # coverage constraint
-                m1 = coverage > 1/9.
-                m2 = coverage < 0.45
-                if (m1 * m2).any():
-                    continue
-
-                mask = coverage >= 0.45
-                if not mask.any():
-                    continue
-
-                # area constraint
-                if self.final_size is not None:
-                    area = (rect[2] - rect[0]) * (rect[3] - rect[1]) * 1.
-                    size = np.sqrt(inter[mask] * self.final_area / area)
-                    if ((11 < size) * (size < 18)).any() or size.max() < 22:
-                        continue
-
-                img = img[rect[1]:rect[3], rect[0]:rect[2]]
-
-                boxes[:, :2] = np.clip(boxes[:, :2], rect[:2], rect[2:])
-                boxes[:, :2] = boxes[:, :2] - rect[:2]
-                boxes[:, 2:] = np.clip(boxes[:, 2:], rect[:2], rect[2:])
-                boxes[:, 2:] = boxes[:, 2:] - rect[:2]
-                boxes[np.logical_not(mask), :] = 0
-
-                #print(min_iou, max_iou)
-
-                if len(cbs[0]) == 4:
-                    return img, boxes
-                else:
-                    return img, _to_coords(boxes)
-
-        # Fallback
-        return img, cbs
-'''
 
 class ObjectRandomCrop(object):
     def __init__(self, prob=1., random_state=np.random):
@@ -927,58 +620,6 @@ class ObjectRandomCrop(object):
 
 
 
-
-
-# Random crop with size 8%-100% and aspect ratio 3/4 - 4/3. (Inception-style)
-class RandomSizedCrop(object):
-    def __init__(self, size, mode='linear', anchor=None, random_state=np.random):
-        self.size = size 
-        self.mode = mode
-        self.anchor = anchor
-        self.random = random_state
-
-        self.scale = Scale(size, mode=mode, anchor=anchor)
-        self.crop = CenterCrop(size)
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        h, w = img.shape[:2]
-
-        for _ in range(10):
-            area = h * w
-            target_area = self.random.uniform(0.16, 1.0) * area   # 0.08~1.0
-            aspect_ratio = self.random.uniform(3. / 4, 4. / 3)
-
-            tw = int(round(np.sqrt(target_area * aspect_ratio)))
-            th = int(round(np.sqrt(target_area / aspect_ratio)))
-
-            if self.random.random_sample() < 0.5:
-                tw, th = th, tw 
-
-            if tw <= w and th <= h:
-                x1 = self.random.randint(0, w - tw + 1)
-                y1 = self.random.randint(0, h - th + 1)
-
-                img = img[y1:y1 + th, x1:x1 + tw]
-
-                resize = lambda im: cv2.resize(im, (self.size, self.size), interpolation=interp_mode)
-                purer = lambda im: cv2.resize(im, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
-                img = HalfBlood(img, self.anchor, resize, purer)
-
-                if cds is not None:
-                    scale_x = self.size / float(tw)
-                    scale_y = self.size / float(th)
-
-                    return img, _coords_clamp([[scale_x*(x-x1), scale_y*(y-y1)] for x, y in cds], img.shape)
-                else:
-                    return img
-
-        # Fallback
-        return self.crop(self.scale(img, cds=cds), cds=cds)
-
-
 class GridCrop(object):
     def __init__(self, size, grid=5, random_state=np.random):
         # 4 grids, 5 grids or 9 grids
@@ -1053,205 +694,6 @@ class Resize(object):
         else:
             return img
 
-
-class RandomResize(object):
-    def __init__(self, scale_range=(0.8, 1.2), ratio_range=1., mode='linear', anchor=None,
-                 random_state=np.random):
-
-        sr = scale_range
-        if isinstance(sr, numbers.Number):
-            sr = (min(sr, 1. / sr), max(sr, 1. / sr))
-        assert  max(sr) <= 5
-        self.sr = sr
-
-        rr = ratio_range
-        if isinstance(rr, numbers.Number):
-            rr = (min(rr, 1. / rr), max(rr, 1. / rr))
-        assert  max(rr) <= 5
-        self.rr = rr
-        
-        self.mode = mode
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        h, w = img.shape[:2]
-
-        scale_factor = _loguniform(self.sr, self.random)
-        ratio_factor = _loguniform(self.rr, self.random)
-
-        th = int(h * scale_factor)
-        tw = int(w * scale_factor * ratio_factor)
-
-        resize = lambda im: cv2.resize(im, (tw, th), interpolation=interp_mode)
-        purer = lambda im: cv2.resize(im, (tw, th), interpolation=cv2.INTER_NEAREST)
-        img = HalfBlood(img, self.anchor, resize, purer)
-        
-        if cds is not None:
-            s_x = tw / float(w)
-            s_y = th / float(h)
-            return img, np.array([[s_x * x, s_y * y] for x, y in cds])
-        else:
-            return img
-
-
-class ElasticTransform(object):
-    def __init__(self, alpha=1000, sigma=40, mode='linear', border='constant', fillval=0, 
-                 anchor=None, random_state=np.random):
-
-        if isinstance(fillval, numbers.Number):
-            fillval = [fillval] * 3
-
-        self.alpha, self.sigma = alpha, sigma
-        self.mode = mode
-        self.border = BorderTypes.get(border, cv2.BORDER_REPLICATE)
-        self.fillval = fillval
-        self.anchor = anchor
-        self.random = random_state
-
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        shape = img.shape[:2]
-
-        ksize = self.sigma * 4 + 1
-        dx = cv2.GaussianBlur((self.random.rand(*img.shape[:2]) * 2 - 1).astype(np.float32), 
-                              (ksize, ksize), 0) * self.alpha
-        dy = cv2.GaussianBlur((self.random.rand(*img.shape[:2]) * 2 - 1).astype(np.float32), 
-                              (ksize, ksize), 0) * self.alpha
-
-        y, x = np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1]), indexing='ij')
-        mapy, mapx = (y + dy).astype(np.float32), (x + dx).astype(np.float32)
-
-        elastic = lambda im: cv2.remap(im, mapx, mapy, interpolation=interp_mode, borderMode=self.border, borderValue=self.fillval)
-        purer = lambda im: cv2.remap(im, mapx, mapy, interpolation=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT)
-        img = HalfBlood(img, self.anchor, elastic, purer)
-
-        if cds is None:
-            return img
-        else:
-            cds_from = np.hstack([mapx.reshape(-1, 1), mapy.reshape(-1, 1)])
-            cds_to = np.hstack([x.reshape(-1, 1), y.reshape(-1, 1)])
-            cds_ = []
-            for coord in cds:
-                # TODO: top-k
-                ind = np.argmin(np.sum((coord - cds_from)**2, axis=1))
-                cds_.append(cds_to[ind])
-            return img, _coords_clamp(cds_, img.shape)
-
-
-class RandomRotate(object):
-    def __init__(self, angle_range=(-30.0, 30.0), mode='linear', border='constant', fillval=0, 
-                 anchor=None, random_state=np.random):   
-        if isinstance(angle_range, numbers.Number):
-            angle_range = (-angle_range, angle_range)
-        self.angle_range = angle_range
-
-        if isinstance(fillval, numbers.Number):
-            fillval = [fillval] * 3
-
-        self.mode = mode
-        self.border = BorderTypes.get(border, cv2.BORDER_REPLICATE)
-        self.fillval = fillval
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img, cds=None):
-        interp_mode = (self.random.choice(list(InterpolationFlags.values())) if self.mode is None 
-                                   else InterpolationFlags.get(self.mode, cv2.INTER_LINEAR))
-
-        h, w = img.shape[:2]
-        angle = self.random.uniform(*self.angle_range)
-
-        M = cv2.getRotationMatrix2D((w/2., h/2.), angle, 1)
-
-        rotate = lambda im: cv2.warpAffine(im, M, dsize=(w, h), flags=self.mode, borderMode=self.border, borderValue=self.fillval)
-        purer = lambda im: cv2.warpAffine(im, M, dsize=(w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT)
-        img = HalfBlood(img, self.anchor, rotate, purer)
-
-        if cds is not None:
-            cos = np.cos(angle * np.pi / 180.)
-            sin = np.sin(angle * np.pi / 180.)
-            cds_ = []
-            for x, y in cds:
-                x, y = x - w/2., -(y - h/2.)
-                x, y = cos*x - sin*y, sin*x + cos*y
-                x, y = x + w/2., -y + h/2.
-                cds_.append([x, y])
-            return img, _coords_clamp(cds_, img.shape)
-        else:
-            return img
-
-
-class Rotate90(object):
-    def __init__(self, random_state=np.random):
-        # 4 directions
-        self.random = random_state
-
-        self.map = {
-            0: lambda x, y, w, h: (    x,     y),
-            1: lambda x, y, w, h: (    y, w-1-x),
-            2: lambda x, y, w, h: (w-1-x, h-1-y),
-            3: lambda x, y, w, h: (h-1-y,     x),
-        }
-
-    def __call__(self, img, cds=None, index=None):
-        h, w = img.shape[:2]
-        if index is None:
-            index = self.random.randint(0, 4)
-        if index not in self.map:
-            raise Exception('invalid index')
-
-        img = np.rot90(img, index)
-
-        if cds is not None:
-            return img, np.array([self.map[index](x, y, w, h) for x, y in cds])
-        else:
-            return img
-
-
-class RandomShift(object):
-    def __init__(self, tx=(-0.1, 0.1), ty=None, border='constant', fillval=0, anchor=None, random_state=np.random):   
-        if isinstance(tx, numbers.Number):
-            tx = (-abs(tx), abs(tx))
-        assert isinstance(tx, tuple) and np.abs(tx).max() < 1
-        if ty is None:
-            ty = tx
-        elif isinstance(ty, numbers.Number):
-            ty = (-abs(ty), abs(ty))
-        assert isinstance(ty, tuple) and np.abs(ty).max() < 1
-        self.tx, self.ty = tx, ty
-
-        if isinstance(fillval, numbers.Number):
-            fillval = [fillval] * 3
-
-        self.border = BorderTypes.get(border, cv2.BORDER_REPLICATE)
-        self.fillval = fillval
-        self.anchor = anchor
-        self.random = random_state
-
-    def __call__(self, img, cds=None):
-        h, w = img.shape[:2]
-        tx = self.random.uniform(*self.tx) * w 
-        ty = self.random.uniform(*self.ty) * h
-
-        M = np.float32([[1,0,tx],[0,1,ty]])
-
-        shift = lambda im: cv2.warpAffine(im, M, dsize=(w, h), flags=cv2.INTER_NEAREST, borderMode=self.border, borderValue=self.fillval)
-        purer = lambda im: cv2.warpAffine(im, M, dsize=(w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT)
-        img = HalfBlood(img, self.anchor, shift, purer)
-
-        if cds is not None:
-            return img, _coords_clamp([[x + tx, y + ty] for x, y in cds], img.shape)
-        else:
-            return img
-
-
 class HorizontalFlip(object):
     def __init__(self, prob=0.5, random_state=np.random):
         self.prob = prob
@@ -1293,39 +735,7 @@ class VerticalFlip(object):
         else:
             return img
 
-
-'''class RandomFlip(object):
-    def __init__(self, random_state=np.random):
-        self.random = random_state
-        self.transforms = [HorizontalFlip(random_state=np.random), 
-                           VerticalFlip(random_state=np.random)]
-
-    def __call__(self, img, cds=None, index=None):
-        hori, vert = self.transforms
-        if index is None:
-            index = self.random.randint(0, 4)
-
-        if index == 0:
-            return hori(img, cds=cds, flip=False)
-        elif index == 1:
-            return hori(img, cds=cds, flip=True)
-        elif index == 2:
-            return vert(img, cds=cds, flip=True)
-        elif index == 3:
-            if cds is None:
-                img = hori(img, flip=True)
-                return vert(img, flip=True)
-            else:
-                img, cds = hori(img, cds=cds, flip=True)
-                return vert(img, cds=cds, flip=False)
-        else:
-            raise Exception('invalid index')'''
-
-
-
-
 # Pipeline
-
 class Lambda(object):
     def __init__(self, lambd):
         assert isinstance(lambd, types.LambdaType)
@@ -1389,23 +799,6 @@ class Split(object):
             return result
         else:
             raise Exception('object must be a numpy array')
-
-
-class Branching(object):
-    # TODO
-    pass
-
-class Bracket(object):
-    # TODO
-    pass
-
-class Flatten(object):
-    # TODO 
-    pass
-
-class Permute(object):
-    # TODO
-    pass
 
 
 class Compose(object):
@@ -1559,17 +952,3 @@ class CoordsToBoxes(object):
 
         return img, boxes, seg
 
-
-class OneHotMask(object):
-    def __init__(self, n_classes):
-        self.n_classes = n_classes
-
-    def __call__(self, mask):
-        if mask.ndim == 3 and mask.shape[2] == 1:
-            mask = mask[:, :, 0]
-        assert mask.ndim == 2 and mask.max() < self.n_classes
-
-        onehot_mask = np.zeros((mask.shape[0], mask.shape[1], self.n_classes), dtype=np.uint8)
-        for i in range(self.n_classes):
-            onehot_mask[:, :, i] = mask == i
-        return onehot_mask
