@@ -8,6 +8,11 @@ from Model.model import PairNet
 from Model.model import TripleNet
 
 from utils.loss import MultiBoxLoss
+from enum import Enum
+
+class ModelNames(str, Enum):
+    PairNet = 'pairnet'
+    TripleNet = 'triplenet'
 
 class LightningModelPairNet(pl.LightningModule):
     def __init__(self, HPARAMS):

@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from multiprocessing import Pool
 import os
+import sys
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -15,7 +16,7 @@ import random
 from numpy.random import RandomState
 import numpy as np
 
-from Model.lightning_model import LightningModelPairNet, LightningModelTripleNet
+from Model.lightning_model import LightningModelPairNet, LightningModelTripleNet, ModelNames
 
 from Dataset.dataset import VOC, VOCDataset
 
@@ -48,6 +49,7 @@ if __name__ == "__main__":
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=4)
     parser.add_argument('--n_classes', type=int, default=20)
+    parser.add_argument('--model', type=str, default=ModelNames.PairNet.value)
     parser.add_argument('--model_checkpoint', type=str, default=None)
     parser.add_argument('--upstream_model', type=str, default=None)
     parser.add_argument('--x4', type=bool, default=False)
@@ -121,7 +123,17 @@ if __name__ == "__main__":
         offline=True
     )
 
-    model = LightningModelTripleNet(cfg)
+    if cfg['model'] == ModelNames.PairNet.value:
+        model = LightningModelPairNet(cfg)
+        print("Model: PairNet")
+    elif cfg['model'] == ModelNames.TripleNet.value:
+        model = LightningModelTripleNet(cfg)
+        print("Model: TripleNet")
+    else:
+        print("ERROR: Invalid model in parameters.")
+        sys.exit()
+        
+
 
     model_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
