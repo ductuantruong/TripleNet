@@ -10,6 +10,8 @@ from Model.model import TripleNet
 from utils.loss import MultiBoxLoss
 from enum import Enum
 
+# Model Names Enum
+# For use with --model param in train/test script 
 class ModelNames(str, Enum):
     PairNet = 'pairnet'
     TripleNet = 'triplenet'
