@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from multiprocessing import Pool
 import os
-import sys
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -12,7 +11,7 @@ import random
 from numpy.random import RandomState
 import numpy as np
 
-from Model.lightning_model import LightningModelPairNet, LightningModelTripleNet, ModelNames
+from Model.lightning_model import LightningModel
 
 from Dataset.dataset import VOC, VOCDataset
 
@@ -48,8 +47,7 @@ if __name__ == "__main__":
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
     parser.add_argument('--n_classes', type=int, default=20)
-    parser.add_argument('--model', type=str, default=ModelNames.PairNet.value)
-    parser.add_argument('--model_checkpoint', type=str, default=None)
+    # parser.add_argument('--model_checkpoint', type=str, default=None)
     parser.add_argument('--upstream_model', type=str, default=None)
     parser.add_argument('--x4', type=bool, default=False)
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     cfg = parser.parse_args()
     cfg = vars(cfg)
     # cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
-    cfg['grids'] =[38,19,10, 10, 10,10]
+    cfg['grids'] =[38,19,10,5,3,2]
 
     print('Training Model on TIMIT Dataset\n#Cores = {}\t#GPU = {}'.format(cfg['n_workers'], cfg['gpu']))
 
@@ -80,7 +78,7 @@ if __name__ == "__main__":
     ## Test Dataset
     test_set = VOCDataset(
         root=cfg['voc_root'], 
-        image_set=[('2007', 'test')],
+        image_set=[('2007', 'val')],
         keep_difficult=True,
         transform=transform,
         target_transform=None
@@ -94,18 +92,8 @@ if __name__ == "__main__":
         num_workers=cfg['n_workers']
     )
 
-    ## Model
-    if cfg['model'] == ModelNames.PairNet.value:
-        model = LightningModelPairNet.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
-        print("Model: PairNet")
-    elif cfg['model'] == ModelNames.TripleNet.value:
-        model = LightningModelTripleNet.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
-        print("Model: TripleNet")
-    else:
-        print("ERROR: Invalid model in parameters.")
-        sys.exit()
-
-
+    # model = LightningModel.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
+    model = LightningModel(cfg)
     model.to('cuda')
     model.eval()
 
@@ -119,12 +107,12 @@ if __name__ == "__main__":
 
     for batch in tqdm(testloader):
         img, bboxes, det_labels, seg_labels = batch
-
+        img, bboxes, det_labels, seg_labels = img.cuda(), bboxes.cuda(), det_labels.cuda(), seg_labels.cuda()
         gt_bboxes.append(bboxes)
         gt_labels.append(det_labels)
 
         loc_hat, det_hat, seg_hat = model(img, is_eval=True)
-        b_pix_ccc, b_IoU, _ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
+        b_pix_ccc, b_IoU, _,_ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
         pix_acc.append(b_pix_ccc)
         pix_acc.append(b_IoU)
 

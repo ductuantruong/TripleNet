@@ -35,8 +35,8 @@ class LightningModelPairNet(pl.LightningModule):
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x,eval=False):
+        return self.model(x,eval)
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
