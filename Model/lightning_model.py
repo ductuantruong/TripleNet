@@ -285,9 +285,9 @@ class LightningModelTripleNet(pl.LightningModule):
                 'val_loss':val_loss, 
                 'val_loc_loss':loc_loss.item(),
                 'val_det_loss':det_loss.item(),
-                'val_seg_loss':seg_loss,
+                'val_seg_loss':seg_loss.item(),
                 'val_seg_loss_msf':seg_loss_msf.item(),
-                'val_seg_labels_clsag':seg_labels_clsag
+                'val_seg_loss_clsag':seg_loss_clsag.item()
             }
 
     def validation_epoch_end(self, outputs):
