@@ -27,6 +27,7 @@ class LightningModelPairNet(pl.LightningModule):
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
 
         self.lr = HPARAMS['lr']
+        self.training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Model Details: #Params = {self.count_total_parameters()}\t#Trainable Params = {self.count_trainable_parameters()}")
 
     def count_total_parameters(self):
@@ -55,7 +56,7 @@ class LightningModelPairNet(pl.LightningModule):
         loc_hat, det_hat, seg_hat = self(img)
 
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        seg_loss = 0
+        seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
         for seg_h in seg_hat:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
             if not torch.isnan(seg_loss_temp):
@@ -65,7 +66,7 @@ class LightningModelPairNet(pl.LightningModule):
 
         return {
                 'loss':loss, 
-                'train_loc_loss': det_loss.item(),
+                'train_loc_loss': loc_loss.item(),
                 'train_det_loss': det_loss.item(),
                 'train_seg_loss': seg_loss.item(),
             }
@@ -87,7 +88,7 @@ class LightningModelPairNet(pl.LightningModule):
         
         loc_hat, det_hat, seg_hat = self(img)
 
-        seg_loss = 0
+        seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
         for seg_h in seg_hat:
           #try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
