@@ -89,7 +89,7 @@ if __name__ == "__main__":
     ## Validation Dataloader
     testloader = data.DataLoader(
         test_set, 
-        batch_size=1,
+        batch_size=cfg['batch_size'],
         shuffle=False, 
         num_workers=cfg['n_workers']
     )
