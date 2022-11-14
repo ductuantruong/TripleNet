@@ -69,14 +69,13 @@ if __name__ == "__main__":
     cfg = parser.parse_args()
     cfg = vars(cfg)
     # cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
-    cfg['grids'] =[38,19,10, 10, 10,10]
+    cfg['grids'] =[38, 19, 10, 5, 3, 2]
 
     print('Training Model on TIMIT Dataset\n#Cores = {}\t#GPU = {}'.format(cfg['n_workers'], cfg['gpu']))
 
     encoder = MultiBox(cfg)
 
     transform = Compose([
-            [ColorJitter(prob=0.5)],  # or write [ColorJitter(), None]
             BoxesToCoords(),
             Resize(300),
             CoordsToBoxes(),
@@ -91,13 +90,13 @@ if __name__ == "__main__":
         image_set=[('2007', 'test')],
         keep_difficult=True,
         transform=transform,
-        target_transform=encoder.encode
+        target_transform=None
     )
 
     ## Validation Dataloader
     testloader = data.DataLoader(
         test_set, 
-        batch_size=cfg['batch_size'],
+        batch_size=1,
         shuffle=False, 
         num_workers=cfg['n_workers']
     )
@@ -129,23 +128,29 @@ if __name__ == "__main__":
 
     gt_bboxes = []
     gt_labels = []
-    pix_acc = []
-    m_IoU = []
+    list_pix_correct = []
+    list_n_label = []
+    list_intersec = []
+    list_uninion = []
     pred_bboxes = []
     pred_labels = []
     pred_scores = []
-
+    i = 0
     for batch in tqdm(testloader):
-
+        # if i == 2:
+            # break
+        # i += 1
         img, bboxes, det_labels, seg_labels = preprocess_batch(batch, is_gpu)
 
         gt_bboxes.append(bboxes)
         gt_labels.append(det_labels)
 
         loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
-        b_pix_ccc, _, b_IoU, _ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
-        pix_acc.append(b_pix_ccc)
-        pix_acc.append(b_IoU)
+        b_pix_correct, b_n_label, b_intersec, b_uninion = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
+        list_pix_correct.append(b_pix_correct)
+        list_n_label.append(b_n_label)
+        list_intersec.append(b_intersec)
+        list_uninion.append(b_uninion)
 
         loc_hat = loc_hat.data.cpu().numpy()[0]
         det_hat = det_hat.data.cpu().numpy()[0]
@@ -157,5 +162,5 @@ if __name__ == "__main__":
         pred_scores.append(scores)
 
     print(eval_voc_detection(pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, iou_thresh=0.5, use_07_metric=True))
-
+    print(eval_voc_segmentation(list_intersec, list_uninion, list_pix_correct, list_n_label))
         

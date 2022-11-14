@@ -256,31 +256,22 @@ class PairNet(nn.Module):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding, is_eval) 
+        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
         return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding, is_eval)
 
 
-    def detection_prediction(self, xs, is_eval):
+    def detection_prediction(self, xs):
         locs = []
         confs = []
-        if is_eval:
-            x = xs[-1]
-            loc = self.list_localized_head[-1](x)
+        for i, x in enumerate(xs):
+            loc = self.list_localized_head[i](x)
             loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
+            locs.append(loc)
 
-            conf = self.list_detector_head[-1](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
+            conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
             conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
-            return loc, conf
-        else:
-            for i, x in enumerate(xs):
-                loc = self.list_localized_head[i](x) # if isinstance(self.list_localized_head, nn.ModuleList) else self.Loc(x)
-                loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
-                locs.append(loc)
-
-                conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
-                conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
-                confs.append(conf)
-            return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+            confs.append(conf)
+        return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
 
     def segmentation_prediction(self, xs, is_eval):
         list_seg_hat = []
