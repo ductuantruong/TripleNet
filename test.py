@@ -36,6 +36,15 @@ def seed_torch(seed=100):
 
 seed_torch()
 
+# Convert batch data into cuda type if is_gpu flag is set
+def preprocess_batch(batch, is_gpu=False):
+    img, bboxes, det_labels, seg_labels = batch
+    if is_gpu:
+        dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        return img.to(dev), bboxes.to(dev), det_labels.to(dev), seg_labels.to(dev)
+    
+    return img, bboxes, det_labels, seg_labels
+
 
 if __name__ == "__main__":
 
@@ -44,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
     parser.add_argument('--n_classes', type=int, default=20)
@@ -55,7 +64,6 @@ if __name__ == "__main__":
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
     parser.add_argument('--run_name', type=str, default='first_try')
-    # parser.add_argument('--model_checkpoint', type=str, default='checkpoints/')
 
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
@@ -83,7 +91,7 @@ if __name__ == "__main__":
         image_set=[('2007', 'test')],
         keep_difficult=True,
         transform=transform,
-        target_transform=None
+        target_transform=encoder.encode
     )
 
     ## Validation Dataloader
@@ -105,8 +113,18 @@ if __name__ == "__main__":
         print("ERROR: Invalid model in parameters.")
         sys.exit()
 
+    ## CPU or GPU
+    is_gpu = False
+    if cfg['gpu'] != 0:
+        is_gpu = True
+        
 
-    model.to('cuda')
+    if is_gpu:
+        device = 'cuda'
+    else:
+        device = 'cpu'
+
+    model.to(device)
     model.eval()
 
     gt_bboxes = []
@@ -118,13 +136,14 @@ if __name__ == "__main__":
     pred_scores = []
 
     for batch in tqdm(testloader):
-        img, bboxes, det_labels, seg_labels = batch
+
+        img, bboxes, det_labels, seg_labels = preprocess_batch(batch, is_gpu)
 
         gt_bboxes.append(bboxes)
         gt_labels.append(det_labels)
 
-        loc_hat, det_hat, seg_hat = model(img, is_eval=True)
-        b_pix_ccc, b_IoU, _ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
+        loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
+        b_pix_ccc, _, b_IoU, _ = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
         pix_acc.append(b_pix_ccc)
         pix_acc.append(b_IoU)
 
