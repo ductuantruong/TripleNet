@@ -21,7 +21,7 @@ from utils.transform import *
 from utils.metric import *
 
 from tqdm import tqdm 
-
+from mean_average_precision import MetricBuilder
 # SEED
 def seed_torch(seed=100):
     random.seed(seed)
@@ -126,24 +126,21 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    gt_bboxes = []
-    gt_labels = []
     list_pix_correct = []
     list_n_label = []
     list_intersec = []
     list_uninion = []
-    pred_bboxes = []
-    pred_labels = []
-    pred_scores = []
     i = 0
+
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=1)
     for batch in tqdm(testloader):
-        # if i == 2:
-            # break
-        # i += 1
         img, bboxes, det_labels, seg_labels = preprocess_batch(batch, is_gpu)
 
-        gt_bboxes.append(bboxes)
-        gt_labels.append(det_labels)
+        np_bboxes = bboxes.squeeze(0).numpy()
+        np_bboxes = np.multiply(np_bboxes, 100)
+
+        np_det_labels = det_labels.squeeze(0).numpy()
+        gt = np.concatenate((np_bboxes, np.expand_dims(np_det_labels, 1), np.zeros((np_bboxes.shape[0], 2))), axis=1)
 
         loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
         b_pix_correct, b_n_label, b_intersec, b_uninion = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
@@ -156,11 +153,12 @@ if __name__ == "__main__":
         det_hat = det_hat.data.cpu().numpy()[0]
 
         boxes, labels, scores = encoder.decode(loc_hat, det_hat, nms_thresh=0.5, conf_thresh=0.01)
+        boxes = np.multiply(boxes, 100)
+        pred = np.concatenate((boxes, np.expand_dims(labels, 1), np.expand_dims(scores, 1)), axis=1)
 
-        pred_bboxes.append(boxes)
-        pred_labels.append(labels)
-        pred_scores.append(scores)
+        metric_fn.add(pred, gt)
 
-    print(eval_voc_detection(pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, iou_thresh=0.5, use_07_metric=True))
+    print(f"VOC PASCAL mAP: {metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.1, 0.1))['mAP']}")
+    print(f"VOC PASCAL mAP in all points: {metric_fn.value(iou_thresholds=0.5)['mAP']}")
     print(eval_voc_segmentation(list_intersec, list_uninion, list_pix_correct, list_n_label))
         
