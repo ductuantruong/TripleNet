@@ -312,9 +312,10 @@ def eval_voc_detection(
     return {'ap': ap, 'map': np.nanmean(ap)}
 
 
-def eval_voc_segmentation(total_inter, total_union, total_correct, total_label, num_classes=20):
-    pixAcc = 1.0 * total_correct / (np.spacing(1) + total_label)
-    IoU = 1.0 * total_inter / (np.spacing(1) + total_union)
+def eval_voc_segmentation(total_inter, total_union, total_correct_pix, total_labelled_pix, num_classes=20):
+    pixAcc = 1.0 * total_correct_pix / (np.spacing(1) + total_labelled_pix)
+    total_inter = np.array(total_inter).astype(np.float)
+    IoU = total_inter / (np.spacing(1) + total_union)
     mIoU = IoU.mean()
     return {
         "Pixel_Accuracy": np.round(pixAcc, 3),
