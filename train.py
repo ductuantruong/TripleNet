@@ -70,7 +70,6 @@ if __name__ == "__main__":
     transform = Compose([
             [ColorJitter(prob=0.5)],  # or write [ColorJitter(), None]
             BoxesToCoords(),
-            ObjectRandomCrop(),
             HorizontalFlip(),
             Resize(300),
             CoordsToBoxes(),
