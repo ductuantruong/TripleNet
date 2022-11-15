@@ -126,10 +126,11 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    list_pix_correct = []
-    list_n_label = []
-    list_intersec = []
-    list_uninion = []
+    # Segmentation Evaluation Vars
+    total_pix_correct = 0   # Total no. of Correct Pixels
+    total_pix_labelled = 0  # Total no. of Labelled Pixels
+    arr_intersec = np.full(cfg['n_classes'], 0.)    # Array of intersection area with GT per class 
+    arr_union = np.full(cfg['n_classes'], 0.)       # Array of union area with GT per class 
     i = 0
 
     metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=cfg['n_classes'])
@@ -144,10 +145,11 @@ if __name__ == "__main__":
 
         loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
         b_pix_correct, b_n_label, b_intersec, b_uninion = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
-        list_pix_correct.append(b_pix_correct)
-        list_n_label.append(b_n_label)
-        list_intersec.append(b_intersec)
-        list_uninion.append(b_uninion)
+        total_pix_correct += b_pix_correct
+        total_pix_labelled += b_n_label
+        arr_intersec = np.add(arr_intersec, b_intersec)
+        arr_union =  np.add(arr_union, b_uninion)
+
 
         loc_hat = loc_hat.data.cpu().numpy()[0]
         det_hat = det_hat.data.cpu().numpy()[0]
@@ -160,5 +162,5 @@ if __name__ == "__main__":
 
     print(f"VOC PASCAL mAP: {metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.1, 0.1))['mAP']}")
     print(f"VOC PASCAL mAP in all points: {metric_fn.value(iou_thresholds=0.5)['mAP']}")
-    print(eval_voc_segmentation(list_intersec, list_uninion, list_pix_correct, list_n_label))
+    print(eval_voc_segmentation(arr_intersec, arr_union, total_pix_correct, total_pix_labelled))
         
