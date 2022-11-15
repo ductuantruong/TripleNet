@@ -132,14 +132,14 @@ if __name__ == "__main__":
     list_uninion = []
     i = 0
 
-    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=1)
+    metric_fn = MetricBuilder.build_evaluation_metric("map_2d", async_mode=True, num_classes=cfg['n_classes'])
     for batch in tqdm(testloader):
         img, bboxes, det_labels, seg_labels = preprocess_batch(batch, is_gpu)
 
-        np_bboxes = bboxes.squeeze(0).numpy()
+        np_bboxes = bboxes.squeeze(0).cpu().numpy()
         np_bboxes = np.multiply(np_bboxes, 100)
 
-        np_det_labels = det_labels.squeeze(0).numpy()
+        np_det_labels = det_labels.squeeze(0).cpu().numpy()
         gt = np.concatenate((np_bboxes, np.expand_dims(np_det_labels, 1), np.zeros((np_bboxes.shape[0], 2))), axis=1)
 
         loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
