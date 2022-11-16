@@ -24,6 +24,8 @@ def _softmax_cross_entropy_with_logits(x, t):
 class MultiBoxLoss(nn.Module):
     def __init__(self):
         super().__init__()
+        self.conf_loss = torch.nn.CrossEntropyLoss(ignore_index=-1)
+
 
     def _hard_negative_mining(self, loss, pos, neg, k):
         loss = loss.detach()
@@ -39,8 +41,10 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(-1).expand_as(xloc)
         loc_loss = F.smooth_l1_loss(xloc[pos_idx].view(-1, 4), loc[pos_idx].view(-1, 4), 
                                     size_average=False) 
-        
-        conf_loss = _softmax_cross_entropy_with_logits(xconf, label)
+
+
+        conf_loss = self.conf_loss(xconf.transpose(1, 2), label)
+        # conf_loss = _softmax_cross_entropy_with_logits(xconf, label)
         hard_neg = self._hard_negative_mining(conf_loss, pos, neg, k)
         conf_loss = conf_loss * (pos + hard_neg).gt(0).float()
         conf_loss = conf_loss.sum()

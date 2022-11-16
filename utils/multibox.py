@@ -80,7 +80,7 @@ class MultiBox(object):
                 ]) / self.prior_variance
         
         labels = labels[idx]
-        labels = 1 + labels
+        labels = labels
         labels[iou < self.neg_thresh] = 0
         labels[(self.neg_thresh <= iou) & (iou < self.pos_thresh)] = -1   # ignored during training
 

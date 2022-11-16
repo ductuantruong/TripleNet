@@ -216,7 +216,7 @@ class PairNet(nn.Module):
         self.list_detector_head = nn.ModuleList([])
         for i in range(len(self.config['grids'])):
             self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
-            self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes + 1), 3, padding=1))
+            self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes), 3, padding=1))
 
         self.segmentation_head = nn.Sequential(
             nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
@@ -269,7 +269,7 @@ class PairNet(nn.Module):
             locs.append(loc)
 
             conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
-            conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes + 1)
+            conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes)
             confs.append(conf)
         return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
 
