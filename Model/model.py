@@ -426,19 +426,18 @@ class TripleNet(nn.Module):
         
         if is_eval:
             # Evaluation
-            
-            # Inner Connected Module Output
-            decoder_embedding = list_decoder_embedding[-1]
-            seg_out, conf_out, loc_out = self.list_inner_conn_modules[-1](decoder_embedding)
+            locs = []
+            confs = []
+            for i, decoder_embedding in enumerate(list_decoder_embedding):
+                seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
+                locs.append(loc_out)
+                confs.append(conf_out)
+                seg_hat = seg_out
 
-            loc_hat = loc_out
-            conf_hat = conf_out
-            seg_hat = seg_out
+            loc_hat = torch.cat(locs, dim=1)
+            conf_hat = torch.cat(confs, dim=1)
 
-            # Class-agnostic segmentation
-            seg_hat_clsag = self.class_agnos_seg_prediction(list_decoder_embedding, is_eval)
-
-            return loc_hat, conf_hat, seg_hat, seg_hat_msf, seg_hat_clsag
+            return loc_hat, conf_hat, seg_hat
         else:
             #Training
 
@@ -479,7 +478,7 @@ class TripleNet(nn.Module):
         if is_eval:
             # Evaluation
             x = xs[-1]
-            seg_hat_cls_agnos = self.clsag_seg_head(x)
+            out = self.clsag_seg_head(x)
             seg_hat_cls_agnos = F.interpolate(out, size=self.image_size, mode='bilinear', align_corners=True)
 
             return seg_hat_cls_agnos
