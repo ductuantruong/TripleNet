@@ -432,12 +432,11 @@ class TripleNet(nn.Module):
                 seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
                 locs.append(loc_out)
                 confs.append(conf_out)
-                seg_hat = seg_out
 
             loc_hat = torch.cat(locs, dim=1)
             conf_hat = torch.cat(confs, dim=1)
 
-            return loc_hat, conf_hat, seg_hat
+            return loc_hat, conf_hat, seg_hat_msf
         else:
             #Training
 
