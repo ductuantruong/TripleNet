@@ -42,20 +42,21 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(add_help=True)
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
-    parser.add_argument('--batch_size', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=3)
     parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=4)
     parser.add_argument('--n_classes', type=int, default=20)
-    parser.add_argument('--model', type=str, default=ModelNames.TripleNet.value)
+    parser.add_argument('--model', type=str, default=ModelNames.PairNet.value)
+    parser.add_argument('--voc_year', type=str, default='2007')
     parser.add_argument('--model_checkpoint', type=str, default=None)
     parser.add_argument('--upstream_model', type=str, default=None)
     parser.add_argument('--x4', type=bool, default=False)
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
-    parser.add_argument('--run_name', type=str, default='triplenet')
+    parser.add_argument('--run_name', type=str, default='pairnet')
 
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     ## Training Dataset
     train_set = VOCDataset(
         root=cfg['voc_root'], 
-        image_set=[('2007', 'train')],
+        image_set=[(cfg['voc_year'], 'train')],
         keep_difficult=True,
         transform=transform,
         target_transform=target_transform
@@ -99,7 +100,7 @@ if __name__ == "__main__":
     ## Validation Dataset
     valid_set = VOCDataset(
         root=cfg['voc_root'], 
-        image_set=[('2007', 'val')],
+        image_set=[(cfg['voc_year'], 'val')],
         keep_difficult=True,
         transform=transform,
         target_transform=target_transform
@@ -135,7 +136,7 @@ if __name__ == "__main__":
 
 
     model_checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints/{}'.format(cfg['run_name']),
+        dirpath='checkpoints/{}'.format(cfg['run_name'] + cfg['voc_year']),
         monitor='val/loss', 
         mode='min',
         verbose=1)
