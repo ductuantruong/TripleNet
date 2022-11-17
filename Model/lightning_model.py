@@ -26,6 +26,11 @@ class LightningModelPairNet(pl.LightningModule):
         self.det_criterion = MultiBoxLoss()
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
 
+        self.train_log = open('txt_log/{}_train_log.txt'.format(HPARAMS['run_name']), 'w+')
+        self.train_log.write("epoch,loss,loc_loss,det_loss,seg_loss"+ "\n")
+        self.val_log = open('txt_log/{}_val_log.txt'.format(HPARAMS['run_name']), 'w+')
+        self.val_log.write("epoch,loss,loc_loss,det_loss,seg_loss"+ "\n")
+
         self.lr = HPARAMS['lr']
         self.training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Model Details: #Params = {self.count_total_parameters()}\t#Trainable Params = {self.count_trainable_parameters()}")
@@ -77,6 +82,7 @@ class LightningModelPairNet(pl.LightningModule):
         loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['train_seg_loss'] for x in outputs]).sum()/n_batch
+        self.train_log.write("{},{},{},{}".format(self.current_epoch,loss,loc_loss,det_loss,seg_loss) + "\n")
 
         self.log('train/loss' , loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
@@ -114,6 +120,7 @@ class LightningModelPairNet(pl.LightningModule):
         loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['val_seg_loss'] for x in outputs]).sum()/n_batch
+        self.val_log.write("{},{},{},{}".format(self.current_epoch,val_loss,loc_loss,det_loss,seg_loss) + "\n")
 
         self.log('val/loss' , val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
