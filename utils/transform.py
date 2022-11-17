@@ -671,21 +671,19 @@ class Resize(object):
             T.Resize(size, InterpolationMode.NEAREST),
             T.ToTensor()
         ]) 
-        # self.mode = mode
-        # self.anchor = anchor
-        # self.random = random_state
 
     def __call__(self, img, cds=None, seg=None):
 
         h, w, c = img.shape
         tw, th = self.size
 
-        img = self.transform(img).numpy().transpose(2, 1, 0)
+        #img = self.transform(img).numpy().transpose(2, 1, 0)
+        img = cv2.resize(img, dsize=self.size, interpolation=cv2.INTER_NEAREST)
         if cds is not None and seg is not None:
-            seg = seg.astype(np.int32)
             s_x = tw / float(w)
             s_y = th / float(h)
-            seg = self.transform(seg).numpy().transpose(2, 1, 0)
+            #seg = self.transform(seg).numpy().transpose(2, 1, 0)
+            seg = cv2.resize(seg, dsize=self.size, interpolation=cv2.INTER_NEAREST)
             return img, np.array([[s_x * x, s_y * y] for x, y in cds]), seg
         else:
             return img

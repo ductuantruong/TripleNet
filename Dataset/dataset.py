@@ -167,7 +167,7 @@ class VOCDataset(torch.utils.data.Dataset):
         if self.target_transform is not None:
             bboxes, det_labels = self.target_transform(bboxes, det_labels)
 
-        return img, bboxes, det_labels, torch.as_tensor(seg_labels.squeeze(2), dtype=torch.long)
+        return img, bboxes, det_labels, torch.as_tensor(seg_labels, dtype=torch.long)
 
     def __len__(self):
         return len(self.ids)
