@@ -52,7 +52,6 @@ if __name__ == "__main__":
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=480)
-    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
@@ -60,7 +59,6 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default=ModelNames.PairNet.value)
     parser.add_argument('--model_checkpoint', type=str, default=None)
     parser.add_argument('--upstream_model', type=str, default=None)
-    parser.add_argument('--x4', type=bool, default=False)
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
     parser.add_argument('--grids', type=list, default=[38, 19, 10, 5, 3, 2])
@@ -159,7 +157,6 @@ if __name__ == "__main__":
 
         metric_fn.add(pred, gt)
 
-    print(f"VOC PASCAL mAP: {metric_fn.value(iou_thresholds=0.5, recall_thresholds=np.arange(0., 1.1, 0.1))['mAP']}")
     print(f"VOC PASCAL mAP in all points: {metric_fn.value(iou_thresholds=0.5)['mAP']}")
     print(eval_voc_segmentation(arr_intersec, arr_union, total_pix_correct, total_pix_labelled))
         
