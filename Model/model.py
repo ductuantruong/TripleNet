@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F 
 
 from torchvision.models import resnet50
-from torchvision.models.resnet import Bottleneck
 from torchvision.ops import SqueezeExcitation
 from collections import OrderedDict
 
@@ -169,17 +168,10 @@ class InnerConnectedModule(nn.Module):
         return seg_out, conf_out, loc_out
 
 class PairNet(nn.Module):
-    def __init__(self, n_classes, image_size=300, x4=True):
+    def __init__(self, n_classes, aspect_ratios, image_size=300):
         super().__init__()
         self.n_classes = n_classes
         self.image_size = image_size
-        if image_size == 300:
-            self.config = self.config300(x4)
-        elif image_size == 512:
-            self.config = self.config512(x4)
-
-        self.skip_layers = self.config['skip_layers']
-        self.pred_layers = self.config['pred_layers']
 
         self.Base = resnet50(pretrained=True)
 
@@ -197,6 +189,8 @@ class PairNet(nn.Module):
             ('res7', BottleneckBlock(2048))])
         )
 
+        self.skip_layers = ['res2', 'res3', 'res4', 'res5', 'res6','res7']
+
         self._initialize_weights(self.res5_7)
 
         self.encoder = nn.Sequential(self.res1_4, self.res5_7)
@@ -211,10 +205,12 @@ class PairNet(nn.Module):
             ('decoder5', DecoderLayer(512,  512,  512))]
         ))
 
-        n_boxes = len(self.config['aspect_ratios']) + 1
+        n_boxes = len(aspect_ratios) + 1
+        n_decoder_output = len(self.decoder._modules.items()) + 1 + 1 # plus one for the feature map of the last encoder
+
         self.list_localized_head = nn.ModuleList([])
         self.list_detector_head = nn.ModuleList([])
-        for i in range(len(self.config['grids'])):
+        for i in range(n_decoder_output):
             self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
             self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes), 3, padding=1))
 
@@ -287,55 +283,14 @@ class PairNet(nn.Module):
                 list_seg_hat.append(out)
             return list_seg_hat
 
-    def config300(self, x4=False):
-        config = {
-            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6','res7'],
-            'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
-            'name': 'PairNet300-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 300,
-            'grids': [75]*x4 + [38, 19, 10, 5, 3, 1],
-            'sizes': [s / 300. for s in [30, 60, 111, 162, 213, 264, 315]],
-            'aspect_ratios': (1/4., 1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 32,
-            'init_lr': 1e-4,
-            'stepvalues': (35000, 50000),    
-            'max_iter': 65000
-        }
-        return config
-
-    def config512(self, x4=False):
-        config = {
-            'skip_layers': ['layer1', 'layer2', 'layer3', 'layer4', 'layer5', 'layer6', 'layer7', 'layer8'],
-            'pred_layers': ['rev_layer7', 'rev_layer6', 'rev_layer5', 'rev_layer4', 'rev_layer3', 'rev_layer2'] + (
-                            ['rev_layer1']*x4),
-            'name': 'PairNet512-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 512,
-            'grids': [128]*x4 + [64, 32, 16, 8, 4, 2, 1],
-            'sizes': [s / 512. for s in [20.48, 61.2, 133.12, 215.04, 296.96, 378.88, 460.8, 542.72]],
-            'aspect_ratios': (1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 16,
-            'init_lr': 1e-4,
-            'stepvalues': (45000, 60000),
-            'max_iter': 75000
-        }
-        return config
-
 
 class TripleNet(nn.Module):
-    def __init__(self, n_classes, image_size=300, x4=True):
+    def __init__(self, n_classes, aspect_ratios, image_size=300):
         super().__init__()
         self.n_classes = n_classes
         self.image_size = image_size
-        if image_size == 300:
-            self.config = self.config300(x4)
-        elif image_size == 512:
-            self.config = self.config512(x4)
-
-        self.skip_layers = self.config['skip_layers']
-        self.pred_layers = self.config['pred_layers']
 
         self.Base = resnet50(pretrained=True)
-
 
         self.resnet = resnet50(pretrained=True)
         self.conv1 = nn.Sequential(*list(self.resnet.children())[:4])
@@ -350,6 +305,8 @@ class TripleNet(nn.Module):
             ('res6', BottleneckBlock(2048)),
             ('res7', BottleneckBlock(2048))])
         )
+        
+        self.skip_layers = ['res2', 'res3', 'res4', 'res5', 'res6','res7']
 
         self._initialize_weights(self.res5_7)
 
@@ -367,7 +324,7 @@ class TripleNet(nn.Module):
             ('decoder5', SEDecoderLayer(512,  512, 512))]
         ))
 
-        n_boxes = len(self.config['aspect_ratios']) + 1
+        n_boxes = len(aspect_ratios) + 1
         n_decoder_output = len(self.decoder._modules.items()) + 1
 
         # Inner Connected Module
@@ -491,40 +448,4 @@ class TripleNet(nn.Module):
                 list_seg_hat_cls_agnos.append(out)
             
             return list_seg_hat_cls_agnos
-
-    def config300(self, x4=False):
-        config = {
-            'skip_layers': ['res2', 'res3', 'res4', 'res5', 'res6', 'res7'],
-            'pred_layers': ['decoder1', 'decoder2', 'decoder3', 'decoder4', 'decoder5'],
-            'name': 'TripleNet300-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 300,
-            'grids': [75]*x4 + [38, 19, 10, 5, 3, 1],
-            'sizes': [s / 300. for s in [30, 60, 111, 162, 213, 264, 315]],
-            'aspect_ratios': (1/4., 1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 32,
-            'init_lr': 1e-4,
-            'stepvalues': (35000, 50000),    
-            'max_iter': 65000
-        }
-        return config
-
-    def config512(self, x4=False):
-        config = {
-            'skip_layers': ['layer1', 'layer2', 'layer3', 'layer4', 'layer5', 'layer6', 'layer7', 'layer8'],
-            'pred_layers': ['rev_layer7', 'rev_layer6', 'rev_layer5', 'rev_layer4', 'rev_layer3', 'rev_layer2'] + (
-                            ['rev_layer1']*x4),
-            'name': 'TripleNet512-resnet50-Det' + '-s4' if x4 else '-s8',
-            'image_size': 512,
-            'grids': [128]*x4 + [64, 32, 16, 8, 4, 2, 1],
-            'sizes': [s / 512. for s in [20.48, 61.2, 133.12, 215.04, 296.96, 378.88, 460.8, 542.72]],
-            'aspect_ratios': (1/3.,  1/2.,  1,  2,  3),
-            'batch_size': 16,
-            'init_lr': 1e-4,
-            'stepvalues': (45000, 60000),
-            'max_iter': 75000
-        }
-        return config
-
-
-
 

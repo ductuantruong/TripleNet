@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(add_help=True)
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--gpu', type=int, default=-1)
@@ -63,13 +63,12 @@ if __name__ == "__main__":
     parser.add_argument('--x4', type=bool, default=False)
     parser.add_argument('--sizes', type=list, default=[s / 300. for s in [30, 60, 111, 162, 213, 264, 315]])
     parser.add_argument('--aspect_ratios', type=list, default=(1/4., 1/3.,  1/2.,  1,  2,  3))
+    parser.add_argument('--grids', type=list, default=[38, 19, 10, 5, 3, 2])
     parser.add_argument('--run_name', type=str, default='first_try')
 
     parser = pl.Trainer.add_argparse_args(parser)
     cfg = parser.parse_args()
     cfg = vars(cfg)
-    # cfg['grids'] = [75]*cfg['x4'] + [38, 19, 10, 5, 3, 1]
-    cfg['grids'] =[38, 19, 10, 5, 3, 2]
 
     print('Training Model on TIMIT Dataset\n#Cores = {}\t#GPU = {}'.format(cfg['n_workers'], cfg['gpu']))
 

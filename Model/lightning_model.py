@@ -21,15 +21,10 @@ class LightningModelPairNet(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.model = PairNet(HPARAMS['n_classes'])
+        self.model = PairNet(HPARAMS['n_classes'], HPARAMS['aspect_ratios'])
             
         self.det_criterion = MultiBoxLoss()
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
-
-        self.train_log = open('txt_log/{}_train_log.txt'.format(HPARAMS['run_name']), 'w+')
-        self.train_log.write("epoch,loss,loc_loss,det_loss,seg_loss"+ "\n")
-        self.val_log = open('txt_log/{}_val_log.txt'.format(HPARAMS['run_name']), 'w+')
-        self.val_log.write("epoch,loss,loc_loss,det_loss,seg_loss"+ "\n")
 
         self.lr = HPARAMS['lr']
         self.training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -82,7 +77,6 @@ class LightningModelPairNet(pl.LightningModule):
         loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['train_seg_loss'] for x in outputs]).sum()/n_batch
-        self.train_log.write("{},{},{},{}".format(self.current_epoch,loss,loc_loss,det_loss,seg_loss) + "\n")
 
         self.log('train/loss' , loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
@@ -96,14 +90,10 @@ class LightningModelPairNet(pl.LightningModule):
 
         seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
         for seg_h in seg_hat:
-          #try:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
             if not torch.isnan(seg_loss_temp):
                 seg_loss += seg_loss_temp
-          #except IndexError:
-          #  seg_loss += self.seg_criterion(seg_h*20/254,seg_labels)
-        # print(loc_hat.shape)
-        # print(bboxes.shape)
+
         loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         val_loss = loc_loss + det_loss + seg_loss
 
@@ -120,59 +110,18 @@ class LightningModelPairNet(pl.LightningModule):
         loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
         det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['val_seg_loss'] for x in outputs]).sum()/n_batch
-        self.val_log.write("{},{},{},{}".format(self.current_epoch,val_loss,loc_loss,det_loss,seg_loss) + "\n")
 
         self.log('val/loss' , val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
 
-    def test_step(self, batch, batch_idx):
-        img, bboxes, det_labels, seg_labels = batch
-        
-        loc_hat, det_hat, seg_hat = self(img)
-
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        seg_loss = self.seg_criterion(seg_hat, seg_labels)
-        loss = loc_loss + det_loss + seg_loss
-
-        return {
-                'test_loss':loss, 
-                'test_loc_loss':loc_loss.item(),
-                'test_det_loss':det_loss.item(),
-                'test_seg_loss':seg_loss.item()
-            }
-
-
-    def test_epoch_end(self, outputs):
-        n_batch = len(outputs)
-        test_loss = torch.tensor([x['test_loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['test_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['test_det_loss'] for x in outputs]).sum()/n_batch
-        seg_loss = torch.tensor([x['test_seg_loss'] for x in outputs]).sum()/n_batch
-
-        self.log('test/loss', test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-
-
-        pbar = {
-                'test/loss':test_loss.item(),
-                'test/loc':loc_loss.item(),
-                'test/det':det_loss.item(),
-                'test/seg':seg_loss.item()
-            }
-        self.logger.log_hyperparams(pbar)
-        self.log_dict(pbar)
-
-
 class LightningModelTripleNet(pl.LightningModule):
     def __init__(self, HPARAMS):
         super().__init__()
         self.save_hyperparameters()
 
-        self.model = TripleNet(HPARAMS['n_classes'])
+        self.model = TripleNet(HPARAMS['n_classes'], HPARAMS['aspect_ratios'])
             
         self.det_criterion = MultiBoxLoss()
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
@@ -313,72 +262,6 @@ class LightningModelTripleNet(pl.LightningModule):
         self.log('val/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
-
-    def test_step(self, batch, batch_idx):
-        img, bboxes, det_labels, seg_labels = batch
-        
-        loc_hat, det_hat, seg_hat, seg_hat_msf, seg_hat_clsag= self(img, is_eval = True)
-
-        # Loc and Det Losss
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-
-        # Loss for Multi-scaled Fusion
-        seg_loss_msf = torch.tensor([0], dtype=torch.float).to(self.training_device)
-        seg_loss_tmp = self.seg_criterion(seg_hat_msf, seg_labels)
-        if not torch.isnan(seg_loss_tmp):
-            seg_loss_msf = self.seg_criterion(seg_hat_msf, seg_labels)
-
-        # Loss for standard segmentation (final layer, class aware)
-        seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
-        seg_loss_tmp = self.seg_criterion(seg_hat, seg_labels)
-        if not torch.isnan(seg_loss_tmp):
-            seg_loss = seg_loss_tmp
-
-        # Loss for class agnostic segmentation
-        seg_labels_clsag = self.convert_to_class_agnost(seg_labels)
-        seg_loss_clsag = torch.tensor([0], dtype=torch.float).to(self.training_device)
-        seg_loss_tmp = self.seg_criterion(seg_hat_clsag, seg_labels_clsag)
-        if not torch.isnan(seg_loss_tmp):
-            seg_loss_clsag = seg_loss_tmp
-
-        loss = loc_loss + det_loss + seg_loss + seg_loss_msf + seg_loss_clsag
-
-        return {
-                'test_loss':loss, 
-                'test_loc_loss':loc_loss.item(),
-                'test_det_loss':det_loss.item(),
-                'test_seg_loss':seg_loss.item(),
-                'test_seg_loss_msf':seg_loss_msf.item(),
-                'test_seg_loss_clsag':seg_loss_clsag.item()
-            }
-
-
-    def test_epoch_end(self, outputs):
-        n_batch = len(outputs)
-        test_loss = torch.tensor([x['test_loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['test_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['test_det_loss'] for x in outputs]).sum()/n_batch
-        seg_loss = torch.tensor([x['test_seg_loss'] for x in outputs]).sum()/n_batch
-        seg_loss_msf = torch.tensor([x['test_seg_loss_msf'] for x in outputs]).sum()/n_batch
-        seg_loss_clsag = torch.tensor([x['test_seg_loss_clsag'] for x in outputs]).sum()/n_batch
-
-        self.log('test/loss', test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
-
-        pbar = {
-                'test/loss':test_loss.item(),
-                'test/loc':loc_loss.item(),
-                'test/det':det_loss.item(),
-                'test/seg':seg_loss.item(),
-                'test/seg_msf':seg_loss_msf.item(),
-                'test/seg_clsag':seg_loss_clsag.item()
-            }
-        self.logger.log_hyperparams(pbar)
-        self.log_dict(pbar)
 
     # Converts given original ground truth labels to class agnostic version
     def convert_to_class_agnost(self, seg_labels):

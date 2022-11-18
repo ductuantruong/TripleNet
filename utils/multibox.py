@@ -145,30 +145,3 @@ def nms(boxes, scores, nms_thresh=0.45, conf_thresh=0, topk=400, topk_after=50):
 
     Keep[idx] = keep
     return Keep
-
-
-
-
-# def soft_nms(boxes, scores, sigma=0.5, Nt=0.3, thresh=0.001, method=1):
-#     num = len(scores)
-#     keep = np.zeros(num, dtype=bool)
-#     for _ in range(num):
-#         i = np.argmax(scores)
-#         if scores[i] < thresh:
-#             break
-#         keep[i] = True
-
-#         iou = batch_iou(boxes[np.newaxis, i], boxes).reshape(-1)
-
-#         if method == 1:   # linear
-#             weight = np.ones_like(iou) * (1 - iou)
-#             weight[iou <= Nt] = 1
-#         elif method == 2:   # gaussian
-#             weight = np.exp(-(iou * iou)/sigma)
-#         else:   # original
-#             weight = np.zeros_like(iou)
-#             weight[iou <= Nt] = 1
-
-#         scores = scores * weight
-#         scores[i] = 0
-#     return keep
