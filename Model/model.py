@@ -208,16 +208,9 @@ class PairNet(nn.Module):
         n_boxes = len(aspect_ratios) + 1
         n_decoder_output = len(self.decoder._modules.items()) + 1 + 1 # plus one for the feature map of the last encoder
 
-        self.list_localized_head = nn.ModuleList([])
-        self.list_detector_head = nn.ModuleList([])
+        self.list_segmentation_head_head = nn.ModuleList([])
         for i in range(n_decoder_output):
-            self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
-            self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes), 3, padding=1))
-
-        self.segmentation_head = nn.Sequential(
-            nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
-        )
-
+            self.list_segmentation_head_head.append(nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1))
 
     def _initialize_weights(self, block):
         for module in block.modules():
@@ -252,34 +245,19 @@ class PairNet(nn.Module):
             x = m(x, list_encoder_embedding[i])
             list_decoder_embedding.append(x)
 
-        loc_hat, det_hat = self.detection_prediction(list_decoder_embedding) 
-        return loc_hat, det_hat, self.segmentation_prediction(list_decoder_embedding, is_eval)
-
-
-    def detection_prediction(self, xs):
-        locs = []
-        confs = []
-        for i, x in enumerate(xs):
-            loc = self.list_localized_head[i](x)
-            loc = loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4)
-            locs.append(loc)
-
-            conf = self.list_detector_head[i](x) if isinstance(self.list_detector_head, nn.ModuleList) else self.list_detector_head(x)
-            conf = conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.n_classes)
-            confs.append(conf)
-        return torch.cat(locs, dim=1), torch.cat(confs, dim=1)
+        return self.segmentation_prediction(list_decoder_embedding, is_eval)
 
     def segmentation_prediction(self, xs, is_eval):
         list_seg_hat = []
         if is_eval:
             x = xs[-1]
             out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-            out = self.segmentation_head(out)
+            out = self.list_segmentation_head_head[-1](out)
             return out
         else:
-            for x in xs:
+            for i, x in enumerate(xs):
                 out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-                out = self.segmentation_head(out)
+                out = self.list_segmentation_head_head[i](out)
                 list_seg_hat.append(out)
             return list_seg_hat
 

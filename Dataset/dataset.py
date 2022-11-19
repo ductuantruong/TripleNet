@@ -123,13 +123,14 @@ class VOCDataset(torch.utils.data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self._imgpath = os.path.join('%s', 'JPEGImages', '%s.jpg')
-        self._annopath = os.path.join('%s', 'Annotations', '%s.xml')
-        self._segpath = os.path.join('%s', 'SegmentationClass', '%s.png')
+        self._imgpath = os.path.join('VOCdevkit/VOC2007', 'JPEGImages', '%s.jpg')
+        self._annopath = os.path.join('VOCdevkit/VOC2007', 'Annotations', '%s.xml')
+        self._segpath = os.path.join('VOCdevkit/VOC2007', 'SegmentationClass', '%s.png')
 
         self.parse_annotation = ParseAnnotation(keep_difficult=keep_difficult)
 
         self.ids = []
+
         for year, split in image_set:
             basepath = os.path.join(self.root, 'VOC' + str(year))
             path = os.path.join(basepath, 'ImageSets', 'Main')
@@ -138,9 +139,15 @@ class VOCDataset(torch.utils.data.Dataset):
                     continue
                 with open(os.path.join(path, file)) as f:
                     for line in f:
-                        self.ids.append((basepath, line.strip()[:-3]))
+                        self.ids.append(line.strip()[:-3])
 
-        self.ids = sorted(list(set(self.ids)), key=lambda _:_[0]+_[1])  # deterministic 
+        for year, split in image_set:
+            basepath = os.path.join(self.root, 'VOC' + str(year))
+            path = os.path.join(basepath, 'SegmentationClass')
+            self.seg_ids = os.listdir(path)
+            self.seg_ids = list(map(lambda x: x[:-4], self.seg_ids))
+        
+        self.ids = list(set(self.ids).intersection(self.seg_ids))
 
     def __getitem__(self, index):
         img_id = self.ids[index]
@@ -148,13 +155,12 @@ class VOCDataset(torch.utils.data.Dataset):
         img = cv2.imread(self._imgpath % img_id)[:, :, ::-1]
         bboxes, det_labels = self.parse_annotation(self._annopath % img_id)
         
-
         if os.path.exists(self._segpath  % img_id):
             seg_labels = Image.open(self._segpath % img_id)
             seg_labels = np.array(seg_labels, dtype=np.uint8)
         else:
             seg_labels = np.zeros((img.shape[0], img.shape[1])) + 255
-        bboxes, det_labels = self.filter(img, bboxes, det_labels)
+
         if self.transform is not None:
             img, bboxes, seg_labels = self.transform(img, bboxes, seg_labels)
 

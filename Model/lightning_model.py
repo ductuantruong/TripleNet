@@ -53,40 +53,33 @@ class LightningModelPairNet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
         
-        loc_hat, det_hat, seg_hat = self(img)
+        seg_hat = self(img)
 
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
         seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
         for seg_h in seg_hat:
             seg_loss_temp = self.seg_criterion(seg_h, seg_labels)
             if not torch.isnan(seg_loss_temp):
                 seg_loss += seg_loss_temp
 
-        loss = loc_loss + det_loss + seg_loss
+        loss = seg_loss
 
         return {
                 'loss':loss, 
-                'train_loc_loss': loc_loss.item(),
-                'train_det_loss': det_loss.item(),
                 'train_seg_loss': seg_loss.item(),
             }
     
     def training_epoch_end(self, outputs):
         n_batch = len(outputs)
         loss = torch.tensor([x['loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['train_seg_loss'] for x in outputs]).sum()/n_batch
 
         self.log('train/loss' , loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
         
-        loc_hat, det_hat, seg_hat = self(img)
+        seg_hat = self(img)
 
         seg_loss = torch.tensor([0], dtype=torch.float).to(self.training_device)
         for seg_h in seg_hat:
@@ -94,26 +87,19 @@ class LightningModelPairNet(pl.LightningModule):
             if not torch.isnan(seg_loss_temp):
                 seg_loss += seg_loss_temp
 
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
-        val_loss = loc_loss + det_loss + seg_loss
+        val_loss = seg_loss
 
         return {
                 'val_loss':val_loss, 
-                'val_loc_loss':loc_loss.item(),
-                'val_det_loss':det_loss.item(),
                 'val_seg_loss':seg_loss.item()
             }
 
     def validation_epoch_end(self, outputs):
         n_batch = len(outputs)
         val_loss = torch.tensor([x['val_loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['val_seg_loss'] for x in outputs]).sum()/n_batch
 
         self.log('val/loss' , val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
 
 class LightningModelTripleNet(pl.LightningModule):
