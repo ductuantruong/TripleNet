@@ -50,6 +50,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(add_help=True)
     parser.add_argument('--voc_root', type=str, default='VOCdevkit')
+    parser.add_argument('--voc_year', type=str, default='2007')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=480)
     parser.add_argument('--gpu', type=int, default=-1)
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     ## Test Dataset
     test_set = VOCDataset(
         root=cfg['voc_root'], 
-        image_set=[('2007', 'test')],
+        image_set=[(cfg['voc_year'], 'test')],
         keep_difficult=True,
         transform=transform,
         target_transform=None

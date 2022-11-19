@@ -45,7 +45,7 @@ class LightningModelPairNet(pl.LightningModule):
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure, on_tpu=False, using_native_amp=False, using_lbfgs=False):
         optimizer.step(closure=optimizer_closure)
-        if self.trainer.global_step > 60:
+        if self.trainer.current_epoch > 60:
             lr_scale = 0.1
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.lr
@@ -146,7 +146,7 @@ class LightningModelTripleNet(pl.LightningModule):
     
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure, on_tpu=False, using_native_amp=False, using_lbfgs=False):
         optimizer.step(closure=optimizer_closure)
-        if self.trainer.global_step > 60:
+        if self.trainer.current_epoch > 60:
             lr_scale = 0.1
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.lr
