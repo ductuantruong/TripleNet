@@ -107,9 +107,9 @@ class LightningModelTripleNet(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.model = TripleNet(HPARAMS['n_classes'], HPARAMS['aspect_ratios'])
+        self.model = TripleNet(HPARAMS['n_classes'], HPARAMS['aspect_ratios'], disable_det=True)
             
-        self.det_criterion = MultiBoxLoss()
+        # self.det_criterion = MultiBoxLoss()
         self.seg_criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
 
         self.lr = HPARAMS['lr']
@@ -140,10 +140,11 @@ class LightningModelTripleNet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
 
-        loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
+        # loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
+        list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
 
         # Loc and Det Loss
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
+        # loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
         # Loss for Multi-scaled Fusion
         seg_loss_msf = torch.tensor([0], dtype=torch.float).to(self.training_device)
@@ -166,12 +167,13 @@ class LightningModelTripleNet(pl.LightningModule):
             if not torch.isnan(seg_loss_tmp):
                 seg_loss_clsag += seg_loss_tmp
         
-        loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
+        # loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
+        loss = seg_loss_msf + seg_loss + seg_loss_clsag
 
         return {
                 'loss':loss, 
-                'train_loc_loss': loc_loss.item(),
-                'train_det_loss': det_loss.item(),
+                # 'train_loc_loss': loc_loss.item(),
+                # 'train_det_loss': det_loss.item(),
                 'train_seg_loss': seg_loss.item(),
                 'train_seg_loss_msf': seg_loss_msf.item(),
                 'train_seg_loss_clsag': seg_loss_clsag.item(),
@@ -180,15 +182,15 @@ class LightningModelTripleNet(pl.LightningModule):
     def training_epoch_end(self, outputs):
         n_batch = len(outputs)
         loss = torch.tensor([x['loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
+        # loc_loss = torch.tensor([x['train_loc_loss'] for x in outputs]).sum()/n_batch
+        # det_loss = torch.tensor([x['train_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['train_seg_loss'] for x in outputs]).sum()/n_batch
         seg_loss_msf = torch.tensor([x['train_seg_loss_msf'] for x in outputs]).sum()/n_batch
         seg_loss_clsag = torch.tensor([x['train_seg_loss_clsag'] for x in outputs]).sum()/n_batch
 
         self.log('train/loss' , loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        # self.log('train/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        # self.log('train/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('train/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)
@@ -196,10 +198,11 @@ class LightningModelTripleNet(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         img, bboxes, det_labels, seg_labels = batch
         
-        loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
+        # loc_hat, det_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
+        list_seg_hat, seg_hat_msf, list_seg_hat_clsag = self(img)
 
         # Loc and Det Loss
-        loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
+        # loc_loss, det_loss = self.det_criterion(loc_hat, det_hat, bboxes, det_labels)
 
         # Loss for Multi-scaled Fusion
         seg_loss_msf = torch.tensor([0]).to(self.training_device)
@@ -222,12 +225,13 @@ class LightningModelTripleNet(pl.LightningModule):
             if not torch.isnan(seg_loss_tmp):
                 seg_loss_clsag += seg_loss_tmp
 
-        val_loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
+        # val_loss = loc_loss + det_loss + seg_loss_msf + seg_loss + seg_loss_clsag
+        val_loss = seg_loss_msf + seg_loss + seg_loss_clsag
 
         return {
                 'val_loss':val_loss, 
-                'val_loc_loss':loc_loss.item(),
-                'val_det_loss':det_loss.item(),
+                # 'val_loc_loss':loc_loss.item(),
+                # 'val_det_loss':det_loss.item(),
                 'val_seg_loss':seg_loss.item(),
                 'val_seg_loss_msf':seg_loss_msf.item(),
                 'val_seg_loss_clsag':seg_loss_clsag.item()
@@ -236,15 +240,15 @@ class LightningModelTripleNet(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         n_batch = len(outputs)
         val_loss = torch.tensor([x['val_loss'] for x in outputs]).mean()
-        loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
-        det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
+        # loc_loss = torch.tensor([x['val_loc_loss'] for x in outputs]).sum()/n_batch
+        # det_loss = torch.tensor([x['val_det_loss'] for x in outputs]).sum()/n_batch
         seg_loss = torch.tensor([x['val_seg_loss'] for x in outputs]).sum()/n_batch
         seg_loss_msf = torch.tensor([x['val_seg_loss_msf'] for x in outputs]).sum()/n_batch
         seg_loss_clsag = torch.tensor([x['val_seg_loss_clsag'] for x in outputs]).sum()/n_batch
 
         self.log('val/loss' , val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        # self.log('val/loc', loc_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
+        # self.log('val/det', det_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg', seg_loss.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg_msf', seg_loss_msf.item(), on_step=False, on_epoch=True, prog_bar=True)
         self.log('val/seg_clsag', seg_loss_clsag.item(), on_step=False, on_epoch=True, prog_bar=True)

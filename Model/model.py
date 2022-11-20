@@ -115,38 +115,40 @@ class SEDecoderLayer(nn.Module):
 
 # Inner-Connected Module for segmentation logits and detection
 class InnerConnectedModule(nn.Module):
-    def __init__(self, in_channels, n_boxes, n_classes, image_size, stride=1):
+    def __init__(self, in_channels, n_boxes, n_classes, image_size, stride=1, disable_det=False):
         super().__init__()
         
         self.image_size = image_size
         self.n_classes = n_classes
         self.n_boxes = n_boxes
+        self.disable_det = disable_det
 
         # Conv for seg output
         self.seg_head = nn.Sequential(
             nn.Conv2d(in_channels, n_classes + 1, kernel_size=3, stride=stride, padding=1)
         )
 
-        # Conv before concat with skip connection
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
-            nn.BatchNorm2d(48),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(48, 128, kernel_size=3, stride=stride, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True))
+        if not disable_det:
+            # Conv before concat with skip connection
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(n_classes + 1, 48, kernel_size=3, stride=stride, padding=1),
+                nn.BatchNorm2d(48),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(48, 128, kernel_size=3, stride=stride, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(inplace=True))
 
-        # Conv after concat with skip connection
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(128+in_channels, 256, kernel_size=3, stride=stride, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True))
+            # Conv after concat with skip connection
+            self.conv2 = nn.Sequential(
+                nn.Conv2d(128+in_channels, 256, kernel_size=3, stride=stride, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True))
 
-        # Conv for loc and conf outputs
-        self.loc_head = nn.Sequential(
-            nn.Conv2d(256, n_boxes * 4, 3, padding=1))
-        self.conf_head = nn.Sequential(
-            nn.Conv2d(256, n_boxes * (n_classes + 1), 3, padding=1))
+            # Conv for loc and conf outputs
+            self.loc_head = nn.Sequential(
+                nn.Conv2d(256, n_boxes * 4, 3, padding=1))
+            self.conf_head = nn.Sequential(
+                nn.Conv2d(256, n_boxes * (n_classes + 1), 3, padding=1))
 
 
     def forward(self, x):
@@ -154,6 +156,9 @@ class InnerConnectedModule(nn.Module):
         
         x = self.seg_head(x)
         seg_out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
+
+        if self.disable_det:
+            return seg_out
 
         x = self.conv1(x)
         x = torch.cat([x, shortcut], dim=1)
@@ -263,10 +268,11 @@ class PairNet(nn.Module):
 
 
 class TripleNet(nn.Module):
-    def __init__(self, n_classes, aspect_ratios, image_size=300):
+    def __init__(self, n_classes, aspect_ratios, image_size=300, disable_det=False):
         super().__init__()
         self.n_classes = n_classes
         self.image_size = image_size
+        self.disable_det = disable_det
 
         self.Base = resnet50(pretrained=True)
 
@@ -309,7 +315,7 @@ class TripleNet(nn.Module):
         self.list_inner_conn_modules = nn.ModuleList([])
         for i in range(n_decoder_output):
             self.list_inner_conn_modules.append(
-                InnerConnectedModule(512, n_boxes, self.n_classes, self.image_size))
+                InnerConnectedModule(512, n_boxes, self.n_classes, self.image_size, disable_det=self.disable_det))
 
         # Multi-scale Fused Segmentation
         self.msf_seg_head = nn.Sequential(
@@ -361,37 +367,59 @@ class TripleNet(nn.Module):
         
         if is_eval:
             # Evaluation
-            locs = []
-            confs = []
-            for i, decoder_embedding in enumerate(list_decoder_embedding):
-                seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
-                locs.append(loc_out)
-                confs.append(conf_out)
+            if not self.disable_det:
+                # Joint Det and Seg Eval
 
-            loc_hat = torch.cat(locs, dim=1)
-            conf_hat = torch.cat(confs, dim=1)
+                # Inner Connected Module Output
+                locs = []
+                confs = []
+                for i, decoder_embedding in enumerate(list_decoder_embedding):
+                    seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
+                    locs.append(loc_out)
+                    confs.append(conf_out)
 
-            return loc_hat, conf_hat, seg_hat_msf
+                loc_hat = torch.cat(locs, dim=1)
+                conf_hat = torch.cat(confs, dim=1)
+
+                return loc_hat, conf_hat, seg_hat_msf
+            else:
+                # Seg Only Eval
+                return seg_hat_msf
         else:
             #Training
-
-            # Inner Connected Module Output
-            locs = []
-            confs = []
-            list_seg_hat = []
-            for i, decoder_embedding in enumerate(list_decoder_embedding):
-                seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
-                locs.append(loc_out)
-                confs.append(conf_out)
-                list_seg_hat.append(seg_out)
-
-            loc_hat = torch.cat(locs, dim=1)
-            conf_hat = torch.cat(confs, dim=1)
 
             # Class-agnostic segmentation
             list_seg_hat_clsag = self.class_agnos_seg_prediction(list_decoder_embedding, is_eval)
 
-            return loc_hat, conf_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag
+            if not self.disable_det:
+                # Joint Det and Seg Training
+
+                # Inner Connected Module Output
+                locs = []
+                confs = []
+                list_seg_hat = []
+                for i, decoder_embedding in enumerate(list_decoder_embedding):
+                    seg_out, conf_out, loc_out = self.list_inner_conn_modules[i](decoder_embedding)
+                    locs.append(loc_out)
+                    confs.append(conf_out)
+                    list_seg_hat.append(seg_out)
+
+                loc_hat = torch.cat(locs, dim=1)
+                conf_hat = torch.cat(confs, dim=1)
+
+                return loc_hat, conf_hat, list_seg_hat, seg_hat_msf, list_seg_hat_clsag
+            else:
+                # Seg Only Train
+
+                # Inner Connected Module Output
+                list_seg_hat = []
+                for i, decoder_embedding in enumerate(list_decoder_embedding):
+                    seg_out = self.list_inner_conn_modules[i](decoder_embedding)
+                    list_seg_hat.append(seg_out)
+
+                return list_seg_hat, seg_hat_msf, list_seg_hat_clsag
+
+            
 
 
 
