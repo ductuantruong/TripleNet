@@ -135,13 +135,15 @@ if __name__ == "__main__":
     for batch in tqdm(testloader):
         img, bboxes, det_labels, seg_labels = preprocess_batch(batch, is_gpu)
 
-        np_bboxes = bboxes.squeeze(0).cpu().numpy()
-        np_bboxes = np.multiply(np_bboxes, 100)
+        # np_bboxes = bboxes.squeeze(0).cpu().numpy()
+        # np_bboxes = np.multiply(np_bboxes, 100)
 
-        np_det_labels = det_labels.squeeze(0).cpu().numpy()
-        gt = np.concatenate((np_bboxes, np.expand_dims(np_det_labels, 1), np.zeros((np_bboxes.shape[0], 2))), axis=1)
+        # np_det_labels = det_labels.squeeze(0).cpu().numpy()
+        # gt = np.concatenate((np_bboxes, np.expand_dims(np_det_labels, 1), np.zeros((np_bboxes.shape[0], 2))), axis=1)
 
-        loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
+        # loc_hat, det_hat, seg_hat = model.model(img, is_eval=True)
+        seg_hat = model.model(img, is_eval=True)
+
         b_pix_correct, b_n_label, b_intersec, b_uninion = seg_eval_metrics(seg_hat, seg_labels, cfg['n_classes'])
         total_pix_correct += b_pix_correct
         total_pix_labelled += b_n_label
@@ -149,15 +151,15 @@ if __name__ == "__main__":
         arr_union =  np.add(arr_union, b_uninion)
 
 
-        loc_hat = loc_hat.data.cpu().numpy()[0]
-        det_hat = det_hat.data.cpu().numpy()[0]
+        # loc_hat = loc_hat.data.cpu().numpy()[0]
+        # det_hat = det_hat.data.cpu().numpy()[0]
 
-        boxes, labels, scores = encoder.decode(loc_hat, det_hat, nms_thresh=0.5, conf_thresh=0.01)
-        boxes = np.multiply(boxes, 100)
-        pred = np.concatenate((boxes, np.expand_dims(labels, 1), np.expand_dims(scores, 1)), axis=1)
+        # boxes, labels, scores = encoder.decode(loc_hat, det_hat, nms_thresh=0.5, conf_thresh=0.01)
+        # boxes = np.multiply(boxes, 100)
+        # pred = np.concatenate((boxes, np.expand_dims(labels, 1), np.expand_dims(scores, 1)), axis=1)
 
-        metric_fn.add(pred, gt)
+        # metric_fn.add(pred, gt)
 
-    print(f"VOC PASCAL mAP in all points: {metric_fn.value(iou_thresholds=0.5)['mAP']}")
+    # print(f"VOC PASCAL mAP in all points: {metric_fn.value(iou_thresholds=0.5)['mAP']}")
     print(eval_voc_segmentation(arr_intersec, arr_union, total_pix_correct, total_pix_labelled))
         
