@@ -1,5 +1,5 @@
 # TripletNet
-This is a pytorch implementation of [Triply Supervised Decoder Networks for Joint Detection and Segmentation](https://arxiv.org/abs/1809.09299) paper. The source code is runnable. However, there are still bugs in our implementations that output weird predictions.
+This is a pytorch implementation of the TripleNet and PairNet models from the paper [Triply Supervised Decoder Networks for Joint Detection and Segmentation](https://arxiv.org/abs/1809.09299). The source code is runnable. However, due to remaining bugs in our implementations, the models will output weird predicitions.
 
 ## Installation
 
@@ -45,7 +45,7 @@ python test.py --model=pairnet --model_checkpoint=checkpoints/pairnet_voc_2007/e
 ```
 
 ### Pretrained Model
-We have uploaded a pretrained model of our experiments. You can download the from [OneDrive](https://entuedu-my.sharepoint.com/:f:/g/personal/ductuan001_e_ntu_edu_sg/Eny1aMXourdIpvNobNd2iDYBzuGnrlsdWCw8w7RXNOEfuw?e=R1NG9z).
+We have uploaded pretrained models of our experiments. You can download them from [OneDrive](https://entuedu-my.sharepoint.com/:f:/g/personal/ductuan001_e_ntu_edu_sg/Eny1aMXourdIpvNobNd2iDYBzuGnrlsdWCw8w7RXNOEfuw?e=R1NG9z).
 
 Download it and put it into the model_checkpoint folder.
 
