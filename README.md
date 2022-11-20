@@ -45,7 +45,8 @@ python test.py --model=pairnet --model_checkpoint=checkpoints/pairnet_voc_2007/e
 ```
 
 ### Pretrained Model
-We have uploaded a pretrained model of our experiments. You can download the from [OneDrive](https://entuedu-my.sharepoint.com/:f:/g/personal/ductuan001_e_ntu_edu_sg/Eny1aMXourdIpvNobNd2iDYBzuGnrlsdWCw8w7RXNOEfuw?e=R1NG9z).
+We have uploaded a pretrained model of our experiments. You can download the from OneDrive:
+[Pairnet](https://entuedu-my.sharepoint.com/personal/ductuan001_e_ntu_edu_sg/_layouts/15/onedrive.aspx?ga=1&id=%2Fpersonal%2Fductuan001%5Fe%5Fntu%5Fedu%5Fsg%2FDocuments%2FDL%5FProj%2Fcheckpoints%2Fpairnet%5Fseg%5Fonly2007)[TripleNet](https://entuedu-my.sharepoint.com/personal/ductuan001_e_ntu_edu_sg/_layouts/15/onedrive.aspx?ga=1&id=%2Fpersonal%2Fductuan001%5Fe%5Fntu%5Fedu%5Fsg%2FDocuments%2FDL%5FProj%2Fcheckpoints%2Ftriple%5Fseg%5Fonly2007).
 
 Download it and put it into the model_checkpoint folder.
 
