@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--voc_year', type=str, default='2007')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=480)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--gpu', type=int, default=-1)
     parser.add_argument('--dev', type=str, default=False)
     parser.add_argument('--n_workers', type=int, default=0)
