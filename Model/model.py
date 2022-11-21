@@ -206,7 +206,7 @@ class PairNet(nn.Module):
         ))
 
         n_boxes = len(aspect_ratios) + 1
-        n_decoder_output = len(self.decoder._modules.items()) + 1 + 1 # plus one for the feature map of the last encoder
+        n_decoder_output = len(self.decoder._modules.items()) + 1
 
         self.list_localized_head = nn.ModuleList([])
         self.list_detector_head = nn.ModuleList([])
@@ -214,10 +214,9 @@ class PairNet(nn.Module):
             self.list_localized_head.append(nn.Conv2d(512, n_boxes * 4, 3, padding=1))
             self.list_detector_head.append(nn.Conv2d(512, n_boxes * (self.n_classes), 3, padding=1))
 
-        self.segmentation_head = nn.Sequential(
-            nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1)
-        )
-
+        self.list_segmentation_head = nn.ModuleList([])
+        for i in range(n_decoder_output):
+            self.list_segmentation_head.append(nn.Conv2d(512, self.n_classes + 1, kernel_size=3, stride=1, padding=1))
 
     def _initialize_weights(self, block):
         for module in block.modules():
@@ -274,12 +273,12 @@ class PairNet(nn.Module):
         if is_eval:
             x = xs[-1]
             out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-            out = self.segmentation_head(out)
+            out = self.list_segmentation_head[-1](out)
             return out
         else:
-            for x in xs:
+            for i, x in enumerate(xs):
                 out = F.interpolate(x, size=self.image_size, mode='bilinear', align_corners=True)
-                out = self.segmentation_head(out)
+                out = self.list_segmentation_head[i](out)
                 list_seg_hat.append(out)
             return list_seg_hat
 

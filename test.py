@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     ## Model
     if cfg['model'] == ModelNames.PairNet.value:
-        model = LightningModelPairNet.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
+        model = LightningModelPairNet.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg, strict=False)
         print("Model: PairNet")
     elif cfg['model'] == ModelNames.TripleNet.value:
         model = LightningModelTripleNet.load_from_checkpoint(cfg['model_checkpoint'], HPARAMS=cfg)
