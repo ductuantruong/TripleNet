@@ -1,7 +1,7 @@
-# TripletNet
-This is a pytorch implementation of the TripleNet and PairNet models from the paper [Triply Supervised Decoder Networks for Joint Detection and Segmentation](https://arxiv.org/abs/1809.09299). The source code is runnable. However, due to remaining bugs in our implementations, the models will output weird predicitions.
+# TripleNet
+This is a pytorch implementation of the TripleNet and PairNet models from the paper [Triply Supervised Decoder Networks for Joint Detection and Segmentation](https://arxiv.org/abs/1809.09299).
 
-In this `seg_only_models` branch, we modify the models to train and make inferences for only segmentation tasks. This modification is mainly for troubleshooting and experimental purposes.
+In this `seg_only_models` branch, we modify the models to train and make inferences for only segmentation tasks. This modification is mainly for troubleshooting and experimental purposes. However, it is ready to use as a PairNet and TripleNet implementation for semantic segmentation task only.
 
 ## Installation
 
@@ -54,6 +54,6 @@ We have uploaded a pretrained model of our experiments. You can download them fr
 Download it and put it into the model_checkpoint folder.
 
 ## Reference
-Some of the code in `Dataset/` and `utils/` is from the following repos
+Most of the code in `Dataset/` and `utils/` is from the following repos
 - [1] [SSD-variants](https://github.com/uoip/SSD-variants)
 - [2] [pytorch-segmentation](https://github.com/yassouali/pytorch-segmentation)
