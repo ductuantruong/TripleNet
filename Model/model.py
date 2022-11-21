@@ -210,8 +210,7 @@ class PairNet(nn.Module):
             ('decoder5', DecoderLayer(512,  512,  512))]
         ))
 
-        n_boxes = len(aspect_ratios) + 1
-        n_decoder_output = len(self.decoder._modules.items()) + 1 + 1 # plus one for the feature map of the last encoder
+        n_decoder_output = len(self.decoder._modules.items()) + 1
 
         self.list_segmentation_head_head = nn.ModuleList([])
         for i in range(n_decoder_output):
